@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+:root {
+  --cream: #faf6ee;
+  --paper: #fffdf9;
+  --navy: #073f68;
+  --navy-deep: #052e4c;
+  --sky: #d9eaf5;
+  --sky-deep: #4f8fb8;
+  --terracotta: #b8583c;
+  --ink: #16283a;
+  --muted: #5b6b7a;
+  --line: #e4dccd;
+  --ok: #2b6e4f;
+  --ok-soft: #e3f1e9;
+  --danger: #a43a2a;
+  --danger-soft: #f9e9e4;
+  --radius-card: 1rem;
+  --radius-control: 0.625rem;
+  --control-height: 2.75rem;
+  --heading-weight: 600;
+}
+
+/* 三個階段共用品牌色，只調整圓角、尺寸與活潑程度。 */
+[data-stage="kids"] {
+  --radius-card: 1.5rem;
+  --radius-control: 1rem;
+  --control-height: 3.25rem;
+}
+[data-stage="senior"] {
+  --radius-card: 0.625rem;
+  --radius-control: 0.5rem;
+}
+
+@theme inline {
+  --color-cream: var(--cream);
+  --color-paper: var(--paper);
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-sky: var(--sky);
+  --color-sky-deep: var(--sky-deep);
+  --color-terracotta: var(--terracotta);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --radius-card: var(--radius-card);
+  --radius-control: var(--radius-control);
+  --font-sans: "Noto Sans TC Variable", system-ui, sans-serif;
+  --font-serif: "Fraunces Variable", "Noto Serif TC Variable", serif;
+}
+
+html {
+  background: var(--cream);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  line-height: 1.6;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-serif);
+  font-weight: var(--heading-weight);
+  color: var(--navy);
+  line-height: 1.25;
+}
+
+:focus-visible {
+  outline: 3px solid var(--sky-deep);
+  outline-offset: 2px;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
