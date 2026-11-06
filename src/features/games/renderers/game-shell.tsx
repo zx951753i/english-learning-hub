@@ -2,11 +2,11 @@
 
 import { ArrowRight, Check, Volume2, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/notice";
 import { submitAnswer, type AnswerResult } from "@/features/games/engine";
-import { speakEnglish } from "@/features/games/speak";
+import { canSpeak, speakEnglish } from "@/features/games/speak";
 import type { PublicRound } from "@/features/games/types";
 
 export type PlayItem = {
@@ -25,11 +25,23 @@ type Props = {
 type Feedback = Extract<AnswerResult, { ok: true }>;
 
 function ListenButton({ text }: { text: string }) {
+  const supported = useSyncExternalStore(
+    () => () => {},
+    canSpeak,
+    () => true,
+  );
   return (
-    <Button variant="secondary" onClick={() => speakEnglish(text)} className="text-lg">
-      <Volume2 size={22} aria-hidden />
-      聽發音
-    </Button>
+    <div className="space-y-1">
+      <Button variant="secondary" onClick={() => speakEnglish(text)} className="text-lg">
+        <Volume2 size={22} aria-hidden />
+        聽發音
+      </Button>
+      {supported ? (
+        <p className="text-sm text-muted">沒有聲音時，請確認手機沒有開啟靜音並調高音量。</p>
+      ) : (
+        <p className="text-sm text-danger">這個瀏覽器不支援語音朗讀。</p>
+      )}
+    </div>
   );
 }
 
@@ -90,9 +102,10 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
   const item = queue[index];
   const speak = item?.round.renderer !== "match_pairs" ? item?.round.speak : undefined;
 
+  // 第一題自動播放：電腦可用，iPhone 會擋下，需按「聽發音」。之後的題目在按「下一題」時播放。
   useEffect(() => {
-    if (speak) speakEnglish(speak);
-  }, [speak]);
+    if (index === 0 && speak) speakEnglish(speak);
+  }, [index, speak]);
 
   useEffect(() => {
     if (!item) router.replace(`/play/${sessionId}/result`);
@@ -106,6 +119,8 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
       router.replace(`/play/${sessionId}/result`);
       return;
     }
+    const upcoming = queue[index + 1]?.round;
+    if (upcoming && upcoming.renderer !== "match_pairs" && upcoming.speak) speakEnglish(upcoming.speak);
     setFeedback(null);
     setSelected("");
     setTyped("");
