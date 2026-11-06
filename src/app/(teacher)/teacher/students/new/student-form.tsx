@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionForm } from "@/components/ui/action-form";
 import Link from "next/link";
 import { useActionState, useRef, useEffect } from "react";
 import { CredentialList } from "@/components/credentials";
@@ -25,7 +26,7 @@ export function StudentForm({ classes }: { classes: { id: string; name: string }
           <CredentialList credentials={[state.credential]} />
         </>
       ) : null}
-      <form ref={form} action={action} className="space-y-4">
+      <ActionForm ref={form} action={action} className="space-y-4">
         <TextField label="姓名或暱稱" name="displayName" required maxLength={50} autoComplete="off" />
         <TextField
           label="帳號"
@@ -57,7 +58,7 @@ export function StudentForm({ classes }: { classes: { id: string; name: string }
             回到學生列表
           </Link>
         </div>
-      </form>
+      </ActionForm>
     </div>
   );
 }

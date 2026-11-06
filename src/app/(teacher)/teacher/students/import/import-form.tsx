@@ -1,5 +1,6 @@
 "use client";
 
+import { ActionForm } from "@/components/ui/action-form";
 import { Download } from "lucide-react";
 import { useActionState } from "react";
 import { CredentialList } from "@/components/credentials";
@@ -48,7 +49,7 @@ export function ImportForm({ classes }: { classes: { id: string; name: string }[
         <Download size={18} aria-hidden />
         下載範本
       </a>
-      <form action={action} className="space-y-4">
+      <ActionForm action={action} className="space-y-4">
         <TextField
           label="CSV 檔案"
           name="file"
@@ -67,7 +68,7 @@ export function ImportForm({ classes }: { classes: { id: string; name: string }[
           ))}
         </SelectField>
         <SubmitButton pendingText="建立中，請勿關閉頁面…">開始建立</SubmitButton>
-      </form>
+      </ActionForm>
     </div>
   );
 }

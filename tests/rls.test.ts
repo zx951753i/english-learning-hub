@@ -260,3 +260,141 @@ describe("資料規則", () => {
     ).rejects.toThrow(/duplicate key/);
   });
 });
+
+describe("Phase 2 教材與題庫", () => {
+  const kidsBook = "20000000-0000-4000-8000-00000000000a";
+  const kidsUnit = "30000000-0000-4000-8000-00000000000a";
+  const kidsUnit2 = "30000000-0000-4000-8000-00000000000b";
+  const hiddenBook = "20000000-0000-4000-8000-00000000000b";
+  const juniorBook = "20000000-0000-4000-8000-00000000000c";
+  const question = "40000000-0000-4000-8000-00000000000a";
+  const insertQuestion = (textbook: string, unit: string, extra = "") => `
+    insert into public.questions (stage_id, textbook_id, unit_id, content_type, difficulty,
+      content, answer_key, source_type, created_by ${extra ? ", review_status, is_active" : ""})
+    select stage_id, '${textbook}', '${unit}', 'vocab_item', 1, '{}', '{}', 'teacher_original',
+      '${teacher}' ${extra} from public.textbooks where id = '${textbook}'`;
+
+  beforeAll(async () => {
+    await db.exec(`
+      insert into public.textbooks (id, stage_id, title)
+        select v.id::uuid, s.id, v.title from public.learning_stages s
+        join (values ('kids', '${kidsBook}', '授權教材'), ('kids', '${hiddenBook}', '未授權教材'),
+                     ('junior', '${juniorBook}', '國中教材')) as v(slug, id, title)
+        on v.slug = s.slug;
+      insert into public.units (id, textbook_id, stage_id, title, order_index)
+        select v.id::uuid, '${kidsBook}', t.stage_id, v.title, v.pos
+        from public.textbooks t,
+          (values ('${kidsUnit}', 'U1', 1), ('${kidsUnit2}', 'U2', 2)) as v(id, title, pos)
+        where t.id = '${kidsBook}';
+      insert into public.class_textbooks (class_id, textbook_id, stage_id)
+        select '${classA}', id, stage_id from public.textbooks where id = '${kidsBook}';
+      insert into public.questions (id, stage_id, textbook_id, unit_id, content_type, difficulty,
+        content, answer_key, source_type, created_by)
+        select '${question}', stage_id, '${kidsBook}', '${kidsUnit}', 'vocab_item', 1,
+          '{"word":"cat"}', '{"answer":"cat"}', 'teacher_original', '${teacher}'
+        from public.textbooks where id = '${kidsBook}';
+    `);
+  });
+
+  it("學生只讀得到班級已授權的教材與單元", async () => {
+    const books = await as("authenticated", studentA, () => rows("select id from public.textbooks"));
+    const units = await as("authenticated", studentA, () => rows("select id from public.units"));
+    expect(books).toEqual([{ id: kidsBook }]);
+    expect(units).toHaveLength(2);
+  });
+
+  it("其他班學生讀不到該教材", async () => {
+    const books = await as("authenticated", studentB, () => rows("select id from public.textbooks"));
+    expect(books).toEqual([]);
+  });
+
+  it("未登入者讀不到教材與題目", async () => {
+    await expect(as("anon", null, () => rows("select id from public.questions"))).rejects.toThrow(
+      /permission denied/,
+    );
+    await expect(as("anon", null, () => rows("select id from public.textbooks"))).rejects.toThrow(
+      /permission denied/,
+    );
+  });
+
+  it("學生直接查詢題目讀不到答案", async () => {
+    const result = await as("authenticated", studentA, () =>
+      rows("select answer_key from public.questions"),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("學生不能新增或修改教材與題目", async () => {
+    await expect(
+      as("authenticated", studentA, () => rows(`
+        insert into public.textbooks (stage_id, title)
+        select id, 'x' from public.learning_stages limit 1`)),
+    ).rejects.toThrow(/row-level security/);
+    await as("authenticated", studentA, () =>
+      db.exec(`update public.textbooks set title = 'x' where id = '${kidsBook}'`),
+    );
+    const [row] = await rows(`select title from public.textbooks where id = '${kidsBook}'`);
+    expect(row.title).toBe("授權教材");
+  });
+
+  it("學生不能調整單元順序", async () => {
+    await as("authenticated", studentA, () =>
+      rows(`select public.move_unit('${kidsUnit2}', -1)`),
+    );
+    const [row] = await rows(`select order_index from public.units where id = '${kidsUnit2}'`);
+    expect(row.order_index).toBe(2);
+  });
+
+  it("停用教材後學生看不到", async () => {
+    await db.exec(`update public.textbooks set is_active = false where id = '${kidsBook}'`);
+    const books = await as("authenticated", studentA, () => rows("select id from public.textbooks"));
+    await db.exec(`update public.textbooks set is_active = true where id = '${kidsBook}'`);
+    expect(books).toEqual([]);
+  });
+
+  it("老師可互換單元順序", async () => {
+    await as("authenticated", teacher, () => rows(`select public.move_unit('${kidsUnit2}', -1)`));
+    const result = await rows(`select id from public.units order by order_index`);
+    expect(result[0].id).toBe(kidsUnit2);
+    await as("authenticated", teacher, () => rows(`select public.move_unit('${kidsUnit2}', 1)`));
+  });
+
+  it("單元不能掛到其他階段", async () => {
+    await expect(
+      rows(`insert into public.units (textbook_id, stage_id, title, order_index)
+            select '${kidsBook}', id, 'x', 9 from public.learning_stages where slug = 'senior'`),
+    ).rejects.toThrow(/foreign key/);
+  });
+
+  it("班級不能授權其他階段的教材", async () => {
+    await expect(
+      rows(`insert into public.class_textbooks (class_id, textbook_id, stage_id)
+            select '${classA}', id, stage_id from public.textbooks where id = '${juniorBook}'`),
+    ).rejects.toThrow(/foreign key/);
+  });
+
+  it("題目不能跨階段或掛到別本教材的單元", async () => {
+    await expect(rows(insertQuestion(juniorBook, kidsUnit))).rejects.toThrow(/foreign key/);
+    await expect(rows(insertQuestion(hiddenBook, kidsUnit))).rejects.toThrow(/foreign key/);
+  });
+
+  it("未確認的題目不能啟用", async () => {
+    await expect(
+      rows(`update public.questions set is_active = true where id = '${question}'`),
+    ).rejects.toThrow(/questions_active_requires_confirmed/);
+  });
+
+  it("已封存的題目不能保持啟用", async () => {
+    await db.exec(`update public.questions set review_status = 'confirmed', is_active = true
+      where id = '${question}'`);
+    await expect(
+      rows(`update public.questions set deleted_at = now() where id = '${question}'`),
+    ).rejects.toThrow(/questions_archived_is_inactive/);
+  });
+
+  it("有題目的單元不能被刪除", async () => {
+    await expect(rows(`delete from public.units where id = '${kidsUnit}'`)).rejects.toThrow(
+      /foreign key/,
+    );
+  });
+});

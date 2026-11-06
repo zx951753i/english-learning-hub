@@ -1,4 +1,4 @@
-import { LayoutDashboard, LogOut, Users, UsersRound } from "lucide-react";
+import { BookOpen, FileQuestion, LayoutDashboard, LogOut, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
@@ -9,6 +9,8 @@ const navItems = [
   { href: "/teacher", label: "總覽", icon: LayoutDashboard },
   { href: "/teacher/students", label: "學生", icon: Users },
   { href: "/teacher/classes", label: "班級", icon: UsersRound },
+  { href: "/teacher/textbooks", label: "教材", icon: BookOpen },
+  { href: "/teacher/questions", label: "題庫", icon: FileQuestion },
 ];
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -27,14 +29,14 @@ export default async function TeacherLayout({ children }: { children: React.Reac
             </Button>
           </form>
         </div>
-        <nav aria-label="老師後台" className="flex gap-1 overflow-x-auto px-3 pb-2 lg:flex-1 lg:flex-col lg:pb-0">
+        <nav aria-label="老師後台" className="flex justify-between gap-0.5 overflow-x-auto px-2 pb-2 sm:justify-start lg:flex-1 lg:flex-col lg:px-3 lg:pb-0">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
-              className="flex min-h-11 shrink-0 items-center gap-2.5 rounded-control px-3 font-medium text-ink hover:bg-sky hover:text-navy"
+              className="flex min-h-11 shrink-0 items-center gap-1 rounded-control px-1.5 text-[15px] font-medium text-ink hover:bg-sky hover:text-navy sm:gap-2.5 sm:px-3 sm:text-base"
             >
-              <Icon size={18} aria-hidden />
+              <Icon size={16} aria-hidden />
               {label}
             </Link>
           ))}
