@@ -5,6 +5,7 @@ import { useActionState, useMemo, useState } from "react";
 import { SelectField, TextArea, TextField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { ImageField } from "@/features/media/image-field";
 import { saveQuestion } from "@/features/question-bank/actions";
 import {
   CONTENT_TYPES,
@@ -36,9 +37,10 @@ type Props = {
   stages: StageOption[];
   textbooks: TextbookOption[];
   initial: QuestionFormValues;
+  mediaNames: string[];
 };
 
-export function QuestionForm({ stages, textbooks, initial }: Props) {
+export function QuestionForm({ stages, textbooks, initial, mediaNames }: Props) {
   const [state, action] = useActionState(saveQuestion.bind(null, initial.id ?? null), {});
   const [textbookId, setTextbookId] = useState(initial.textbookId);
   const [unitId, setUnitId] = useState(initial.unitId);
@@ -60,6 +62,11 @@ export function QuestionForm({ stages, textbooks, initial }: Props) {
 
   return (
     <ActionForm action={action} className="space-y-5">
+      <datalist id="media-names">
+        {mediaNames.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
       <fieldset className="space-y-4">
         <legend className="mb-2 font-serif text-xl font-semibold text-navy">題目位置</legend>
         <SelectField
@@ -132,12 +139,24 @@ export function QuestionForm({ stages, textbooks, initial }: Props) {
         {type.fields.map((field) => {
           const shared = {
             key: `${contentType}-${field.key}`,
-            label: field.required ? field.label : `${field.label}（選填）`,
+            label: field.required || field.conditional ? field.label : `${field.label}（選填）`,
             name: `field_${field.key}`,
             hint: field.hint,
             required: field.required,
             defaultValue: initial.contentType === contentType ? initial.fields?.[field.key] : undefined,
           };
+          if (field.image) {
+            return (
+              <ImageField
+                key={shared.key}
+                label={shared.label}
+                name={shared.name}
+                hint={shared.hint}
+                defaultValue={shared.defaultValue}
+                listId="media-names"
+              />
+            );
+          }
           if (field.options) {
             return (
               <SelectField {...shared} key={shared.key} defaultValue={shared.defaultValue ?? ""}>

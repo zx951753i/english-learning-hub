@@ -25,6 +25,10 @@ export type FieldDef = {
   required?: boolean;
   multiline?: boolean;
   options?: string[];
+  /** 不是單獨必填，但也不標示為選填，例如文字或圖片擇一。 */
+  conditional?: boolean;
+  /** 值為媒體庫中的圖片檔名。 */
+  image?: boolean;
 };
 
 export type ContentType = {
@@ -74,6 +78,7 @@ export const CONTENT_TYPES: ContentType[] = [
       { key: "meaning_zh", label: "中文意思", required: true },
       { key: "part_of_speech", label: "詞性", hint: "例如 n.、v.、adj." },
       { key: "example_sentence", label: "例句" },
+      { key: "image", label: "圖片", image: true, hint: "媒體庫中的檔名，例如 apple.png" },
     ],
     build(values) {
       const word = clean(values.word);
@@ -84,6 +89,7 @@ export const CONTENT_TYPES: ContentType[] = [
           meaning_zh: clean(values.meaning_zh),
           part_of_speech: clean(values.part_of_speech),
           example_sentence: clean(values.example_sentence),
+          image: clean(values.image).toLowerCase(),
         },
         answerKey: { answer: word },
         summary: `${word}｜${clean(values.meaning_zh)}`,
@@ -94,6 +100,7 @@ export const CONTENT_TYPES: ContentType[] = [
       meaning_zh: text(content.meaning_zh),
       part_of_speech: text(content.part_of_speech),
       example_sentence: text(content.example_sentence),
+      image: text(content.image),
     }),
   }),
   defineType({
@@ -172,44 +179,62 @@ export const CONTENT_TYPES: ContentType[] = [
     usesPassage: true,
     fields: [
       { key: "stem", label: "題幹", required: true, multiline: true },
-      { key: "option_a", label: "選項 A", required: true },
-      { key: "option_b", label: "選項 B", required: true },
+      { key: "image", label: "題幹圖片", image: true },
+      { key: "option_a", label: "選項 A", conditional: true, hint: "文字或圖片至少填一項" },
+      { key: "option_a_image", label: "選項 A 圖片", image: true },
+      { key: "option_b", label: "選項 B", conditional: true, hint: "文字或圖片至少填一項" },
+      { key: "option_b_image", label: "選項 B 圖片", image: true },
       { key: "option_c", label: "選項 C" },
+      { key: "option_c_image", label: "選項 C 圖片", image: true },
       { key: "option_d", label: "選項 D" },
+      { key: "option_d_image", label: "選項 D 圖片", image: true },
       { key: "correct", label: "正確答案", required: true, options: [...OPTION_LETTERS] },
     ],
     build(values) {
       const correct = clean(values.correct).toUpperCase();
       const entries = OPTION_LETTERS.flatMap((letter) => {
-        const value = clean(values[`option_${letter.toLowerCase()}`]);
-        return value ? [{ key: letter, text: value }] : [];
+        const lower = letter.toLowerCase();
+        const value = clean(values[`option_${lower}`]);
+        const image = clean(values[`option_${lower}_image`]).toLowerCase();
+        return value || image ? [{ key: letter, text: value, image }] : [];
       });
       const errors: string[] = [];
+      if (entries.length < 2) errors.push("至少需要 2 個選項。");
       if (!entries.some((option) => option.key === correct)) {
         errors.push("正確答案必須是已填寫的選項。");
       }
-      if (new Set(entries.map((option) => option.text.toLowerCase())).size !== entries.length) {
+      const identities = entries.map((option) => `${option.text.toLowerCase()}|${option.image}`);
+      if (new Set(identities).size !== entries.length) {
         errors.push("選項內容不可重複。");
       }
       if (errors.length > 0) return { ok: false, errors };
       return {
         ok: true,
-        content: { stem: clean(values.stem), options: entries },
+        content: {
+          stem: clean(values.stem),
+          image: clean(values.image).toLowerCase(),
+          options: entries,
+        },
         answerKey: { answer: correct },
         summary: clean(values.stem),
       };
     },
     flatten(content, answerKey) {
       const options = Array.isArray(content.options)
-        ? (content.options as { key: string; text: string }[])
+        ? (content.options as { key: string; text: string; image?: string }[])
         : [];
-      const find = (letter: string) => options.find((option) => option.key === letter)?.text ?? "";
+      const find = (letter: string) => options.find((option) => option.key === letter);
+      const entry = (letter: string) => ({
+        [`option_${letter.toLowerCase()}`]: find(letter)?.text ?? "",
+        [`option_${letter.toLowerCase()}_image`]: find(letter)?.image ?? "",
+      });
       return {
         stem: text(content.stem),
-        option_a: find("A"),
-        option_b: find("B"),
-        option_c: find("C"),
-        option_d: find("D"),
+        image: text(content.image),
+        ...entry("A"),
+        ...entry("B"),
+        ...entry("C"),
+        ...entry("D"),
         correct: text(answerKey.answer),
       };
     },

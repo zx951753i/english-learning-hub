@@ -40,3 +40,9 @@ export async function loadContentTree() {
 
   return { stages: (stages ?? []) as StageOption[], textbooks: tree as TextbookOption[] };
 }
+
+export async function loadMediaNames() {
+  const supabase = await createClient();
+  const { data } = await supabase.from("media_assets").select("file_name").order("file_name");
+  return data?.map((item) => item.file_name as string) ?? [];
+}

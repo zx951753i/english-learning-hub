@@ -1,4 +1,13 @@
-import { BookOpen, FileQuestion, LayoutDashboard, LogOut, Users, UsersRound } from "lucide-react";
+import {
+  BookOpen,
+  FileQuestion,
+  Gamepad2,
+  Image as ImageIcon,
+  LayoutDashboard,
+  LogOut,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
@@ -11,6 +20,8 @@ const navItems = [
   { href: "/teacher/classes", label: "班級", icon: UsersRound },
   { href: "/teacher/textbooks", label: "教材", icon: BookOpen },
   { href: "/teacher/questions", label: "題庫", icon: FileQuestion },
+  { href: "/teacher/media", label: "媒體", icon: ImageIcon },
+  { href: "/teacher/games", label: "遊戲", icon: Gamepad2 },
 ];
 
 export default async function TeacherLayout({ children }: { children: React.ReactNode }) {
@@ -29,7 +40,7 @@ export default async function TeacherLayout({ children }: { children: React.Reac
             </Button>
           </form>
         </div>
-        <nav aria-label="老師後台" className="flex justify-between gap-0.5 overflow-x-auto px-2 pb-2 sm:justify-start lg:flex-1 lg:flex-col lg:px-3 lg:pb-0">
+        <nav aria-label="老師後台" className="flex gap-0.5 overflow-x-auto px-2 pb-2 lg:flex-1 lg:flex-col lg:px-3 lg:pb-0">
           {navItems.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

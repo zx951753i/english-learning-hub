@@ -61,6 +61,26 @@ describe("七種內容類型", () => {
     expect(type(key).build({}).ok).toBe(false);
   });
 
+  it("選擇題的選項可以只有圖片，也支援題幹圖片", () => {
+    const built = type("choice_item").build({
+      stem: "Which one is a cat?",
+      image: "Stem.PNG",
+      option_a_image: "cat.png",
+      option_b_image: "dog.png",
+      correct: "A",
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    expect(built.content.image).toBe("stem.png");
+    const flat = type("choice_item").flatten(built.content, built.answerKey);
+    expect(flat.option_b_image).toBe("dog.png");
+    expect(type("choice_item").build(flat)).toEqual(built);
+  });
+
+  it("選擇題至少要有兩個選項", () => {
+    expect(type("choice_item").build({ stem: "Q", option_a: "a", correct: "A" }).ok).toBe(false);
+  });
+
   it("找錯誤題的答案不放進題目內容", () => {
     const built = type("error_item").build(samples.error_item);
     expect(built.ok && JSON.stringify(built.content)).not.toContain("goes");
@@ -173,6 +193,13 @@ describe("題目批次匯入", () => {
   it("會考分級格式錯誤時指出", () => {
     const { errors } = parseQuestionTable([header, row({ ...good, 會考分級: "C" })], vocab, context);
     expect(errors[0].message).toContain("會考分級");
+  });
+
+  it("圖片必須已在媒體庫，大小寫不影響", () => {
+    const withMedia = { ...context, mediaNames: new Set(["apple.png"]) };
+    expect(parseQuestionTable([header, row({ ...good, 圖片: "Apple.PNG" })], vocab, withMedia).errors).toEqual([]);
+    const { errors } = parseQuestionTable([header, row({ ...good, 圖片: "pear.png" })], vocab, withMedia);
+    expect(errors[0].message).toContain("pear.png");
   });
 
   it("限制單次題數", () => {

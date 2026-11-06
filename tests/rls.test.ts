@@ -19,6 +19,9 @@ const bootstrap = `
   create role authenticated nologin;
   create role service_role nologin bypassrls;
   create schema auth;
+  create schema storage;
+  create table storage.buckets (id text primary key, name text, public boolean,
+    file_size_limit bigint, allowed_mime_types text[]);
   create table auth.users (id uuid primary key);
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
@@ -396,5 +399,103 @@ describe("Phase 2 教材與題庫", () => {
     await expect(rows(`delete from public.units where id = '${kidsUnit}'`)).rejects.toThrow(
       /foreign key/,
     );
+  });
+});
+
+describe("Phase 3 遊戲與作答", () => {
+  const book = "20000000-0000-4000-8000-00000000000a";
+  const unit = "30000000-0000-4000-8000-00000000000a";
+  const question = "40000000-0000-4000-8000-00000000000a";
+  const game = "50000000-0000-4000-8000-00000000000a";
+  const hidden = "50000000-0000-4000-8000-00000000000b";
+  const session = "60000000-0000-4000-8000-00000000000a";
+  const item = "70000000-0000-4000-8000-00000000000a";
+
+  beforeAll(async () => {
+    await db.exec(`
+      insert into public.games (id, game_type, title, stage_id, textbook_id, unit_id, is_published, created_by)
+        select v.id::uuid, 'word_spelling', v.title, t.stage_id, t.id, '${unit}', v.pub, '${teacher}'
+        from public.textbooks t,
+          (values ('${game}', '已發布', true), ('${hidden}', '草稿', false)) as v(id, title, pub)
+        where t.id = '${book}';
+      insert into public.game_sessions (id, student_id, game_id, game_type, stage_id, textbook_id, unit_id, question_total)
+        select '${session}', '${studentA}', '${game}', 'word_spelling', stage_id, id, '${unit}', 1
+        from public.textbooks where id = '${book}';
+      insert into public.game_session_items (id, session_id, question_id, position, question_snapshot, public_round, grading_key)
+        values ('${item}', '${session}', '${question}', 1, '{}', '{}', '{"answer":"cat"}');
+      insert into public.answers (session_id, session_item_id, student_id, textbook_id, unit_id, game_type, question_id, selected_answer, is_correct)
+        values ('${session}', '${item}', '${studentA}', '${book}', '${unit}', 'word_spelling', '${question}', '"cat"', true);
+      insert into public.student_question_stats (student_id, question_id) values ('${studentA}', '${question}');
+    `);
+  });
+
+  it("學生只看得到已授權且已發布的遊戲", async () => {
+    const a = await as("authenticated", studentA, () => rows("select id from public.games"));
+    const b = await as("authenticated", studentB, () => rows("select id from public.games"));
+    expect(a).toEqual([{ id: game }]);
+    expect(b).toEqual([]);
+  });
+
+  it("學生讀不到遊戲題目與批改答案", async () => {
+    const result = await as("authenticated", studentA, () =>
+      rows("select grading_key from public.game_session_items"),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it("學生讀不到媒體庫", async () => {
+    const result = await as("authenticated", studentA, () => rows("select id from public.media_assets"));
+    expect(result).toEqual([]);
+  });
+
+  it("學生只讀得到自己的作答與成績", async () => {
+    for (const table of ["game_sessions", "answers", "student_question_stats"]) {
+      const own = await as("authenticated", studentA, () => rows(`select student_id from public.${table}`));
+      const other = await as("authenticated", studentB, () => rows(`select student_id from public.${table}`));
+      expect(own).toHaveLength(1);
+      expect(other).toEqual([]);
+    }
+  });
+
+  it.each([
+    ["answers", `update public.answers set is_correct = true`],
+    ["game_sessions", `update public.game_sessions set score = 100`],
+    ["student_question_stats", `delete from public.student_question_stats`],
+    ["game_session_items", `update public.game_session_items set grading_key = '{}'`],
+  ])("學生不能竄改 %s", async (_, sql) => {
+    await expect(as("authenticated", studentA, () => rows(sql))).rejects.toThrow(/permission denied/);
+  });
+
+  it("學生不能自行新增成績", async () => {
+    await expect(
+      as("authenticated", studentA, () =>
+        rows(`insert into public.game_sessions (student_id, game_id, game_type, stage_id, textbook_id, unit_id, question_total, score)
+              select student_id, game_id, game_type, stage_id, textbook_id, unit_id, 1, 100 from public.game_sessions`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("學生不能建立遊戲", async () => {
+    await expect(
+      as("authenticated", studentA, () =>
+        rows(`insert into public.games (game_type, title, stage_id, textbook_id, unit_id)
+              select game_type, 'x', stage_id, textbook_id, unit_id from public.games limit 1`),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it("老師可讀取全部作答紀錄，但不能竄改", async () => {
+    const result = await as("authenticated", teacher, () => rows("select id from public.answers"));
+    expect(result).toHaveLength(1);
+    await expect(
+      as("authenticated", teacher, () => rows("update public.answers set is_correct = false")),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("同一題不會重複計分", async () => {
+    await expect(
+      rows(`insert into public.answers (session_id, session_item_id, student_id, textbook_id, unit_id, game_type, question_id, selected_answer, is_correct)
+            select session_id, session_item_id, student_id, textbook_id, unit_id, game_type, question_id, selected_answer, is_correct from public.answers`),
+    ).rejects.toThrow(/duplicate key/);
   });
 });

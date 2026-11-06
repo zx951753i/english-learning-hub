@@ -207,7 +207,11 @@ export async function previewImport(_: PreviewState, formData: FormData): Promis
   const stage = stages.find((item) => item.id === book?.stage_id);
   if (!book || !stage) return { errors: [{ line: 0, message: "找不到這本教材。" }] };
 
+  const supabase = await createClient();
+  const { data: media } = await supabase.from("media_assets").select("file_name");
+
   const { rows, errors } = parseQuestionTable(table, type, {
+    mediaNames: new Set(media?.map((item) => item.file_name)),
     difficultyLabels: stage.difficulty_labels,
     units: book.units.map((unit) => ({
       id: unit.id,
@@ -218,7 +222,6 @@ export async function previewImport(_: PreviewState, formData: FormData): Promis
   });
   if (rows.length === 0 && errors.length > 0) return { errors };
 
-  const supabase = await createClient();
   const { data, error } = await supabase
     .from("import_batches")
     .insert({

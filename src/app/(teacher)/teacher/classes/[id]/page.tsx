@@ -5,7 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, EmptyState } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
+import { SelectField } from "@/components/ui/field";
 import { requireTeacher } from "@/features/auth/session";
+import { authorizeTextbook, revokeTextbook } from "@/features/games/admin-actions";
 import {
   addStudentsToClass,
   removeStudentFromClass,
@@ -30,10 +32,17 @@ export default async function ClassDetailPage({ params, searchParams }: Props) {
   const supabase = await createClient();
   const { data: item } = await supabase
     .from("classes")
-    .select("id, name, description, is_archived, learning_stages(name)")
+    .select("id, name, description, is_archived, stage_id, learning_stages(name)")
     .eq("id", id)
     .maybeSingle();
   if (!item) notFound();
+
+  const [{ data: authorized }, { data: stageBooks }] = await Promise.all([
+    supabase.from("class_textbooks").select("textbook_id, textbooks(title)").eq("class_id", id),
+    supabase.from("textbooks").select("id, title").eq("stage_id", item.stage_id).order("title"),
+  ]);
+  const authorizedIds = new Set(authorized?.map((row) => row.textbook_id));
+  const availableBooks = stageBooks?.filter((book) => !authorizedIds.has(book.id)) ?? [];
 
   const [{ data: memberRows }, { data: students }] = await Promise.all([
     supabase
@@ -74,7 +83,8 @@ export default async function ClassDetailPage({ params, searchParams }: Props) {
         </div>
       </div>
 
-      {error ? <Notice>操作失敗，請稍後再試。</Notice> : null}
+      {error === "textbook" ? <Notice>教材授權失敗，請確認教材與班級屬於同一階段。</Notice> : null}
+      {error && error !== "textbook" ? <Notice>操作失敗，請稍後再試。</Notice> : null}
 
       <Card>
         <h2 className="mb-3 text-xl">班級成員（{members.length}）</h2>
@@ -134,6 +144,46 @@ export default async function ClassDetailPage({ params, searchParams }: Props) {
           )}
         </Card>
       ) : null}
+
+      <Card>
+        <h2 className="mb-3 text-xl">授權教材（{authorized?.length ?? 0}）</h2>
+        {authorized && authorized.length > 0 ? (
+          <ul className="mb-3 divide-y divide-line">
+            {authorized.map((row) => {
+              const title = (row.textbooks as unknown as { title: string }).title;
+              return (
+                <li key={row.textbook_id} className="flex items-center justify-between gap-3 py-2">
+                  <span className="font-medium">{title}</span>
+                  <form action={revokeTextbook.bind(null, item.id, row.textbook_id)} className="shrink-0">
+                    <SubmitButton variant="ghost" className="whitespace-nowrap" aria-label={`取消授權 ${title}`}>
+                      取消授權
+                    </SubmitButton>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="mb-3 text-sm text-muted">授權後，班上學生才看得到這本教材的遊戲。</p>
+        )}
+        {availableBooks.length > 0 ? (
+          <form action={authorizeTextbook.bind(null, item.id)} className="flex flex-wrap items-end gap-3">
+            <div className="min-w-48 flex-1">
+              <SelectField label="選擇教材" name="textbookId" required defaultValue="">
+                <option value="" disabled>
+                  請選擇
+                </option>
+                {availableBooks.map((book) => (
+                  <option key={book.id} value={book.id}>
+                    {book.title}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+            <SubmitButton variant="secondary">授權</SubmitButton>
+          </form>
+        ) : null}
+      </Card>
 
       <Card>
         <h2 className="mb-4 text-xl">班級資料</h2>

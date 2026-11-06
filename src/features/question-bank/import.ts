@@ -15,6 +15,8 @@ export type ImportContext = {
     passages: { id: string; title: string }[];
   }[];
   difficultyLabels: string[];
+  /** 媒體庫內的小寫檔名。 */
+  mediaNames?: Set<string>;
 };
 
 export type ImportRow = {
@@ -138,6 +140,12 @@ export function parseQuestionTable(
     const values: Values = Object.fromEntries(
       type.fields.map((field) => [field.key, read(field.label)]),
     );
+    for (const field of type.fields.filter((item) => item.image)) {
+      const name = (values[field.key] ?? "").toLowerCase();
+      if (name && context.mediaNames && !context.mediaNames.has(name)) {
+        rowErrors.push(`媒體庫找不到圖片「${values[field.key]}」。`);
+      }
+    }
     const built = type.build(values);
     if (!built.ok) rowErrors.push(...built.errors);
 

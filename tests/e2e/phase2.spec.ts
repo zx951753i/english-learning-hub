@@ -69,9 +69,9 @@ test.describe.serial("Phase 2 教材與題庫", () => {
     await page.getByRole("combobox", { name: /^單元/ }).selectOption({ label: "Unit 1" });
     await page.getByLabel("主題（選填）").selectOption({ label: "Animals" });
     await page.getByLabel("題目類型").selectOption({ label: "選擇題" });
-    await page.getByLabel("題幹").fill(`Stem ${word}`);
-    await page.getByLabel("選項 A", { exact: true }).fill("cat");
-    await page.getByLabel("選項 B", { exact: true }).fill("dog");
+    await page.getByRole("textbox", { name: "題幹", exact: true }).fill(`Stem ${word}`);
+    await page.getByRole("textbox", { name: /^選項 A 文字/ }).fill("cat");
+    await page.getByRole("textbox", { name: /^選項 B 文字/ }).fill("dog");
     await page.getByLabel("正確答案").selectOption("C");
     await page.getByLabel("連結文章（選填）").selectOption({ label: "My Pet" });
     await page.getByLabel("難度").selectOption({ label: "Level 2" });
@@ -85,7 +85,7 @@ test.describe.serial("Phase 2 教材與題庫", () => {
     await expect(page.locator("main span", { hasText: "待確認" }).first()).toBeVisible();
 
     await page.getByRole("link", { name: new RegExp(`Stem ${word}`) }).click();
-    await expect(page.getByLabel("題幹")).toHaveValue(`Stem ${word}`);
+    await expect(page.getByRole("textbox", { name: "題幹", exact: true })).toHaveValue(`Stem ${word}`);
     await expect(page.getByLabel("正確答案")).toHaveValue("B");
     await expect(page.getByLabel("連結文章（選填）")).not.toHaveValue("");
     await page.getByLabel("我已確認題目與答案，可開放使用").check();

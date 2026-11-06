@@ -1,6 +1,6 @@
 # English Learning Hub
 
-老師用教材帶學生課後自學的英文平台。目前完成 Phase 2：登入、權限、學生與班級、教材與題庫管理。
+老師用教材帶學生課後自學的英文平台。目前完成 Phase 3：登入、權限、學生與班級、教材與題庫、媒體庫、遊戲引擎與前三款遊戲。
 
 ## 技術
 
@@ -23,6 +23,11 @@ npm run dev
 npm run check          # lint、型別、單元與 RLS 測試、production build
 npx playwright test    # 端對端流程，需要測試用 Supabase，見 playwright.config.ts
 ```
+
+## 新增遊戲
+
+在 `src/features/games/definitions/` 新增定義，加入 `registry.ts`，並在 `game_types` 新增一筆。
+`publicRound` 會送到瀏覽器，不可放入答案；`gradingKey` 只留在伺服器。
 
 ## 規則
 

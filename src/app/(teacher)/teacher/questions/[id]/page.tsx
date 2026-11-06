@@ -7,7 +7,7 @@ import { SubmitButton } from "@/components/ui/submit-button";
 import { requireTeacher } from "@/features/auth/session";
 import { archiveQuestion } from "@/features/question-bank/actions";
 import { getContentType, type ContentTypeKey } from "@/features/question-bank/content-types";
-import { loadContentTree } from "@/features/question-bank/data";
+import { loadContentTree, loadMediaNames } from "@/features/question-bank/data";
 import { createClient } from "@/lib/supabase/server";
 import { QuestionForm } from "../question-form";
 
@@ -35,6 +35,7 @@ export default async function EditQuestionPage({ params, searchParams }: Props) 
   const type = getContentType(question.content_type);
   if (!type) notFound();
   const { stages, textbooks } = await loadContentTree();
+  const mediaNames = await loadMediaNames();
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -49,6 +50,7 @@ export default async function EditQuestionPage({ params, searchParams }: Props) 
         <QuestionForm
           stages={stages}
           textbooks={textbooks}
+          mediaNames={mediaNames}
           initial={{
             id,
             textbookId: question.textbook_id,

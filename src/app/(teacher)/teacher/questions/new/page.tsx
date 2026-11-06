@@ -3,7 +3,7 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { requireTeacher } from "@/features/auth/session";
 import { getContentType, type ContentTypeKey } from "@/features/question-bank/content-types";
-import { loadContentTree } from "@/features/question-bank/data";
+import { loadContentTree, loadMediaNames } from "@/features/question-bank/data";
 import { QuestionForm } from "../question-form";
 
 export const metadata: Metadata = { title: "新增題目" };
@@ -23,6 +23,7 @@ export default async function NewQuestionPage({ searchParams }: Props) {
   await requireTeacher();
   const params = await searchParams;
   const { stages, textbooks } = await loadContentTree();
+  const mediaNames = await loadMediaNames();
 
   const book = textbooks.find((item) => item.id === params.textbook);
   const unit = book?.units.find((item) => item.id === params.unit);
@@ -37,6 +38,7 @@ export default async function NewQuestionPage({ searchParams }: Props) {
           key={params.saved ?? "new"}
           stages={stages}
           textbooks={textbooks}
+          mediaNames={mediaNames}
           initial={{
             textbookId: book?.id ?? "",
             unitId: unit?.id ?? "",
