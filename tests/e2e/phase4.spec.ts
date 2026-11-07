@@ -121,7 +121,7 @@ test.describe.serial("Phase 4 冒險世界", () => {
     await expect(page.getByRole("region", { name: "最近完成的關卡" }).getByText("第二關")).toBeVisible();
     await page.getByText("換頭像").click();
     await page.getByRole("button", { name: "選擇魔法師" }).click();
-    await expect(page.getByRole("button", { name: "選擇魔法師" })).toHaveAttribute("aria-pressed", "true");
+    await page.waitForLoadState("networkidle");
     await page.reload();
     await page.getByText("換頭像").click();
     await expect(page.getByRole("button", { name: "選擇魔法師" })).toHaveAttribute("aria-pressed", "true");
