@@ -1,4 +1,5 @@
 import { shuffle } from "@/features/games/shuffle";
+import { baseLetter, isSingleLetter } from "@/features/games/letters";
 import type { GameDefinition } from "@/features/games/types";
 
 const letterOf = (content: Record<string, unknown>) => String(content.letter ?? "").trim();
@@ -11,10 +12,10 @@ export const alphabetMatching: GameDefinition = {
   contentTypes: ["phonics_item"],
   stages: ["kids"],
   minQuestions: 2,
-  identity: (question) => letterOf(question.content).toLowerCase(),
-  accepts: (question) => /^[a-z]$/i.test(letterOf(question.content)),
+  identity: (question) => baseLetter(letterOf(question.content)),
+  accepts: (question) => isSingleLetter(letterOf(question.content)),
   buildRounds(questions, _pool, random) {
-    const letters = questions.map((question) => letterOf(question.content).toLowerCase());
+    const letters = questions.map((question) => baseLetter(letterOf(question.content)));
     const rights = shuffle(letters, random);
     return letters.map((letter) => ({
       publicRound: { renderer: "match_pairs" as const, left: letter.toUpperCase(), rights },

@@ -173,6 +173,28 @@ test.describe.serial("Phase 6 新遊戲、Final Boss、音檔", () => {
     await expect(page.getByText(/答對 \d+ \/ \d+ 題/)).toBeVisible();
   });
 
+  test("Alphabet Matching 接受「Tt」寫法；題目不夠時說明原因", async ({ page }) => {
+    await loginTeacher(page);
+    await page.goto("/teacher/questions/import");
+    await page.getByRole("combobox", { name: /^教材/ }).selectOption({ label: book });
+    await page.getByLabel("題目類型").selectOption({ label: "自然發音" });
+    await page.getByLabel("Excel 或 CSV 檔案").setInputFiles({
+      name: "q.csv",
+      mimeType: "text/csv",
+      buffer: Buffer.from("\uFEFF單元,難度,字母或字母組合,發音,例字\r\nUnit 1,1,Tt,/t/,top\r\n"),
+    });
+    await page.getByRole("button", { name: "上傳並預覽" }).click();
+    await page.getByLabel("題目來源").selectOption({ label: "Teacher Original：老師確認的原創題目" });
+    await page.getByLabel("我已確認這批題目與答案，匯入後直接開放使用").check();
+    await page.getByRole("button", { name: /確認匯入/ }).click();
+    await expect(page.getByText(/已匯入 1 題/)).toBeVisible();
+
+    await addLevel(page, zoneUrl, { type: "Alphabet Matching", title: `字母${run}`, unlock: "一律開放", publish: false });
+    // a、b、m、Tt 可用；sh 是字母組合
+    await expect(page.getByText("可用題目 4 題")).toBeVisible();
+    await expect(page.getByText(/1 題不適用 Alphabet Matching/)).toBeVisible();
+  });
+
   test("有上傳音檔的單字，按「聽發音」播放老師的音檔", async ({ page, browser, baseURL }) => {
     await loginTeacher(page);
     const level = await addLevel(page, zoneUrl, { type: "Word Spelling", title: `音檔${run}`, unlock: "一律開放" });

@@ -1,3 +1,4 @@
+import { baseLetter } from "@/features/games/letters";
 import { shuffle } from "@/features/games/shuffle";
 import type { GameDefinition, QuestionRow } from "@/features/games/types";
 
@@ -23,20 +24,21 @@ export const phonicsSoundMatch: GameDefinition = {
   contentTypes: ["phonics_item"],
   stages: ["kids"],
   minQuestions: 2,
-  identity: (question) => letter(question).toLowerCase(),
+  identity: (question) => baseLetter(letter(question)),
   accepts: (question) => Boolean(letter(question) && words(question).length > 0),
   buildRounds(questions, pool, random) {
     return questions.map((question) => {
-      const target = letter(question).toLowerCase();
+      // 「Ii」視同 i：比對重複與例字時都用正規化後的字母，選項仍顯示老師寫的樣子
+      const target = baseLetter(letter(question));
       const example = shuffle(words(question), random)[0];
       const exampleLower = example.toLowerCase();
       const seen = new Set([target]);
       const others = shuffle(pool, random)
         .map((item) => letter(item))
         .filter((item) => {
-          const lower = item.toLowerCase();
-          if (!lower || seen.has(lower) || exampleLower.includes(lower)) return false;
-          seen.add(lower);
+          const base = baseLetter(item);
+          if (!base || seen.has(base) || exampleLower.includes(base)) return false;
+          seen.add(base);
           return true;
         })
         .slice(0, OPTION_COUNT - 1);

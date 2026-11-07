@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { deleteLevel, saveLevelQuestions, setLevelPublished } from "@/features/adventure/admin-actions";
-import { levelQuestionPool } from "@/features/adventure/level-pool";
+import { explainLevelPool, levelQuestionPool } from "@/features/adventure/level-pool";
 import { requireTeacher } from "@/features/auth/session";
 import { loadEligibleQuestions } from "@/features/games/eligible";
 import { startLevel } from "@/features/games/engine";
@@ -51,11 +51,12 @@ export default async function LevelPage({ params, searchParams }: Props) {
   const zone = level.island_zones as unknown as { name: string };
   const definition = getGameDefinition(game.game_type);
 
-  const [candidates, pool, { data: fixed }, { count: sessions }] = await Promise.all([
+  const [candidates, pool, { data: fixed }, { count: sessions }, reasons] = await Promise.all([
     loadEligibleQuestions(createAdminClient(), game),
     levelQuestionPool(id),
     supabase.from("level_questions").select("question_id").eq("level_id", id),
     supabase.from("game_sessions").select("id", { count: "exact", head: true }).eq("level_id", id).neq("mode", "preview"),
+    explainLevelPool(game),
   ]);
   const fixedIds = new Set(fixed?.map((row) => row.question_id));
   const ready = pool.length >= (definition?.minQuestions ?? 2);
@@ -89,6 +90,16 @@ export default async function LevelPage({ params, searchParams }: Props) {
             每局 {game.question_count} 題。
           </span>
         </p>
+        {reasons.length > 0 ? (
+          <div className={`rounded-control px-3 py-2 text-sm ${ready ? "bg-cream text-muted" : "bg-danger-soft text-danger"}`}>
+            <p className="font-medium">{ready ? "單元裡還有題目沒有用到：" : "為什麼題目不夠："}</p>
+            <ul className="mt-1 list-disc space-y-0.5 pl-5">
+              {reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <form action={startLevel.bind(null, id, "preview", undefined)}>
             <SubmitButton variant="secondary" disabled={!ready} pendingText="準備中…">

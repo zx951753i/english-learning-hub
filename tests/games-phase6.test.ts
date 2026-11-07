@@ -182,3 +182,39 @@ describe("作答後唸出正確答案", () => {
     }
   });
 });
+
+describe("「Aa」寫法的字母", () => {
+  it("Ii、Aa 視同單一字母；sh、Ss 以外的寫法照舊", async () => {
+    const { baseLetter, isSingleLetter } = await import("@/features/games/letters");
+    expect(baseLetter("Ii")).toBe("i");
+    expect(baseLetter(" Aa ")).toBe("a");
+    expect(baseLetter("sh")).toBe("sh");
+    expect(baseLetter("AA")).toBe("aa");
+    expect(isSingleLetter("Ii")).toBe(true);
+    expect(isSingleLetter("i")).toBe(true);
+    expect(isSingleLetter("sh")).toBe(false);
+    expect(isSingleLetter("ee")).toBe(false);
+  });
+  it("Alphabet Matching 可以使用「Ii」格式的題目", async () => {
+    const { alphabetMatching } = await import("@/features/games/definitions/alphabet-matching");
+    const ii = phonics("Ii", ["insect"]);
+    const tt = phonics("Tt", ["top"]);
+    expect(alphabetMatching.accepts(ii)).toBe(true);
+    const rounds = alphabetMatching.buildRounds([ii, tt], [], seeded());
+    expect(rounds.map((round) => round.publicRound)).toEqual([
+      expect.objectContaining({ left: "I" }),
+      expect.objectContaining({ left: "T" }),
+    ]);
+    expect(alphabetMatching.grade("i", rounds[0].gradingKey)).toBe(true);
+  });
+  it("Phonics Sound Match：例字裡有的字母（Tt 寫法）也不當干擾選項", () => {
+    const pool = [phonics("Aa", ["cat"]), phonics("Tt", ["top"]), phonics("Bb", ["bag"]), phonics("Mm", ["map"]), phonics("Ss", ["sun"])];
+    for (let seed = 1; seed < 30; seed += 1) {
+      const [round] = phonicsSoundMatch.buildRounds([pool[0]], pool, seeded(seed));
+      if (round.publicRound.renderer !== "single_choice") throw new Error();
+      const labels = round.publicRound.options.map((o) => o.label);
+      expect(labels).toContain("Aa");
+      expect(labels).not.toContain("Tt");
+    }
+  });
+});
