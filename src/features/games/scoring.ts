@@ -2,6 +2,8 @@ export const scoreFor = (correct: number, total: number) =>
   total > 0 ? Math.round((correct / total) * 100) : 0;
 
 const DAY = 24 * 60 * 60 * 1000;
+/** 錯題之後連續答對幾次算學會（老師設定：2 次）。 */
+export const MISTAKE_CLEAR_STREAK = 2;
 /** 連續答對 1、2、3 次後的複習間隔（天）。 */
 const REVIEW_DAYS = [3, 7, 14];
 
@@ -21,11 +23,11 @@ export const emptyStats: QuestionStats = {
   is_open_mistake: false,
 };
 
-/** 答錯隔 1 天複習；連續答對 3 次後移出錯題。 */
+/** 答錯隔 1 天複習；之後連續答對 MISTAKE_CLEAR_STREAK 次就移出錯題本。 */
 export function nextStats(previous: QuestionStats, isCorrect: boolean, now: Date) {
   const consecutive = isCorrect ? previous.consecutive_correct + 1 : 0;
   const hadMistake = previous.is_open_mistake;
-  const isOpen = isCorrect ? hadMistake && consecutive < 3 : true;
+  const isOpen = isCorrect ? hadMistake && consecutive < MISTAKE_CLEAR_STREAK : true;
   const days = isCorrect ? REVIEW_DAYS[Math.min(consecutive, 3) - 1] : 1;
   return {
     attempt_count: previous.attempt_count + 1,

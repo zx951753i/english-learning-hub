@@ -23,8 +23,15 @@ export function starsFor(score: number, two = DEFAULT_TWO_STAR, three = DEFAULT_
   return 1;
 }
 
-/** 依順序判斷每關狀態。第一關永遠開放；第一個開放但未完成的關卡為「下一關」。 */
-export function computeLevelStates(levels: LevelInput[], stars: Map<string, number>): LevelState[] {
+/**
+ * 依順序判斷每關狀態。第一關永遠開放；第一個開放但未完成的關卡為「下一關」。
+ * assigned：老師指派給這位學生的關卡，不受解鎖條件限制。
+ */
+export function computeLevelStates(
+  levels: LevelInput[],
+  stars: Map<string, number>,
+  assigned: Set<string> = new Set(),
+): LevelState[] {
   const ordered = [...levels].sort((a, b) => a.order_index - b.order_index);
   let currentAssigned = false;
   return ordered.map((level, index) => {
@@ -32,6 +39,7 @@ export function computeLevelStates(levels: LevelInput[], stars: Map<string, numb
     const previous = index > 0 ? (stars.get(ordered[index - 1].id) ?? 0) : null;
     const unlocked =
       index === 0 ||
+      assigned.has(level.id) ||
       level.unlock_rule === "always_open" ||
       (level.unlock_rule === "previous_complete" && (previous ?? 0) >= 1) ||
       (level.unlock_rule === "previous_two_stars" && (previous ?? 0) >= 2);

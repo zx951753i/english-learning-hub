@@ -7,7 +7,10 @@ import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { toggleStudentActive } from "@/features/accounts/actions";
 import { requireTeacher } from "@/features/auth/session";
+import { loadStudentRecord } from "@/features/records/data";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { LearningRecord } from "./learning-record";
 import { ResetPassword, StudentEditor } from "./student-editor";
 
 export const metadata: Metadata = { title: "學生資料" };
@@ -38,13 +41,15 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
     .eq("student_id", id)
     .is("left_at", null);
 
+  const record = await loadStudentRecord(supabase, createAdminClient(), id);
+
   const classes = (memberships ?? []) as unknown as {
     class_id: string;
     classes: { name: string; is_archived: boolean };
   }[];
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <div>
         <Link href="/teacher/students" className="text-sm text-navy underline underline-offset-4">
           學生列表
@@ -56,6 +61,8 @@ export default async function StudentDetailPage({ params, searchParams }: Props)
       </div>
 
       {error === "status" ? <Notice>狀態更新失敗，請稍後再試。</Notice> : null}
+
+      <LearningRecord studentId={student.id} record={record} />
 
       <Card>
         <h2 className="mb-4 text-xl">基本資料</h2>

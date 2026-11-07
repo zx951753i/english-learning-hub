@@ -2,6 +2,8 @@ export type RendererKey = "match_pairs" | "single_choice" | "text_input";
 
 export type QuestionRow = {
   id: string;
+  /** 錯題複習局跨單元，作答時用題目本身的單元記錄。 */
+  unit_id?: string;
   topic_id: string | null;
   content_type: string;
   content: Record<string, unknown>;

@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  ClipboardCheck,
   Map as MapIcon,
   FileQuestion,
   Gamepad2,
@@ -22,6 +23,7 @@ const navItems = [
   { href: "/teacher/textbooks", label: "教材", icon: BookOpen },
   { href: "/teacher/questions", label: "題庫", icon: FileQuestion },
   { href: "/teacher/islands", label: "闖關島", icon: MapIcon },
+  { href: "/teacher/assignments", label: "任務", icon: ClipboardCheck },
   { href: "/teacher/media", label: "媒體", icon: ImageIcon },
   { href: "/teacher/games", label: "遊戲", icon: Gamepad2 },
 ];

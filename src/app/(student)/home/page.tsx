@@ -1,4 +1,4 @@
-import { Flag, Lock } from "lucide-react";
+import { Check, Flag, Lock } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import {
@@ -19,6 +19,13 @@ import {
 } from "@/features/adventure/rules";
 import { requireStudent } from "@/features/auth/session";
 import { startLevel } from "@/features/games/engine";
+import { loadOpenMistakes, loadTodayMission } from "@/features/missions/data";
+import {
+  assignmentStatus,
+  formatDue,
+  type AssignmentStatus,
+} from "@/features/missions/rules";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "冒險地圖" };
@@ -38,7 +45,7 @@ export default async function WorldMapPage() {
     { data: progress },
     { data: badges },
     { data: earned },
-    { count: reviewCount },
+    assignments,
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -67,12 +74,14 @@ export default async function WorldMapPage() {
       .select("id, code, name, description")
       .order("created_at"),
     supabase.from("student_badges").select("badge_id"),
-    supabase
-      .from("student_question_stats")
-      .select("question_id", { count: "exact", head: true })
-      .eq("is_open_mistake", true)
-      .lte("next_review_at", new Date().toISOString()),
+    loadAssignments(supabase),
   ]);
+  const admin = createAdminClient();
+  const openMistakes = (await loadOpenMistakes(admin, profile.id)).length;
+  const mission = await loadTodayMission(admin, profile.id, {
+    hasLevels: (levels?.length ?? 0) > 0,
+    openMistakes,
+  });
 
   const avatar = isAvatar(me?.avatar_key ?? "")
     ? (me!.avatar_key as "explorer")
@@ -196,41 +205,140 @@ export default async function WorldMapPage() {
               <Flag size={24} className="text-[#F2B629]" aria-hidden />
               Today&apos;s Mission
             </h2>
-            {next ? (
-              <div className="flex items-center justify-between gap-3 rounded-[18px] bg-white/10 px-4 py-3">
-                <div className="min-w-0">
-                  <p className="text-[17px] font-bold">{next.title}</p>
-                  <p className="text-sm text-sky">{next.zone}・下一關</p>
-                </div>
-                <form
-                  action={startLevel.bind(null, next.id, "normal", undefined)}
-                >
-                  <SubmitButton
-                    pendingText="準備中…"
-                    aria-label={`出發：${next.title}`}
-                    className="rounded-full bg-[#F2B629] text-[#3a2700] hover:bg-[#e5a91f]"
+            {mission ? (
+              <ol className="space-y-2.5">
+                {mission.tasks.map((task) => (
+                  <li
+                    key={task.key}
+                    className="flex items-center justify-between gap-3 rounded-[18px] bg-white/10 px-4 py-3"
                   >
-                    出發
-                  </SubmitButton>
-                </form>
-              </div>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        className={`flex size-8 shrink-0 items-center justify-center rounded-full ${
+                          task.done
+                            ? "bg-[#F2B629] text-[#3a2700]"
+                            : "border-2 border-white/40"
+                        }`}
+                      >
+                        {task.done ? <Check size={18} aria-hidden /> : null}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-[17px] font-bold">
+                          {task.label}
+                          <span className="sr-only">
+                            {task.done ? "，已完成" : "，未完成"}
+                          </span>
+                        </p>
+                        <p className="text-sm text-sky">
+                          {task.key === "level"
+                            ? next
+                              ? `${next.zone}・${next.title}`
+                              : "任選一關再挑戰也可以"
+                            : openMistakes > 0
+                              ? `錯題本還有 ${openMistakes} 題`
+                              : "錯題本清空了"}
+                        </p>
+                      </div>
+                    </div>
+                    {task.done ? null : task.key === "level" && next ? (
+                      <form
+                        action={startLevel.bind(
+                          null,
+                          next.id,
+                          "normal",
+                          undefined,
+                        )}
+                      >
+                        <SubmitButton
+                          pendingText="準備中…"
+                          aria-label={`出發：${next.title}`}
+                          className="rounded-full bg-[#F2B629] text-[#3a2700] hover:bg-[#e5a91f]"
+                        >
+                          出發
+                        </SubmitButton>
+                      </form>
+                    ) : task.key === "review" ? (
+                      <Link
+                        href="/mistakes"
+                        className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-[#F2B629] px-4 font-bold text-[#3a2700] hover:bg-[#e5a91f]"
+                      >
+                        複習
+                      </Link>
+                    ) : null}
+                  </li>
+                ))}
+              </ol>
             ) : (
               <p className="rounded-[18px] bg-white/10 px-4 py-3">
                 {!classes?.length
                   ? "老師還沒有把您加入班級，加入後就能出發。"
-                  : levels?.length
-                    ? "目前開放的關卡都完成了，太棒了！"
-                    : "老師正在準備關卡，很快就能出發。"}
+                  : "老師正在準備關卡，很快就能出發。"}
               </p>
             )}
-            {reviewCount ? (
-              <p className="rounded-[18px] bg-white/10 px-4 py-3 text-[15px]">
-                有 <b>{reviewCount}</b>{" "}
-                題到了該複習的時間；錯題本將在下一次更新開放。
+            {mission?.complete ? (
+              <p className="rounded-[18px] bg-[#F2B629] px-4 py-3 text-[15px] font-bold text-[#3a2700]">
+                今天的任務完成了！明天會有新的任務。
               </p>
             ) : null}
           </section>
         </div>
+
+        {assignments.length > 0 ? (
+          <section aria-labelledby="assigned" className={`${card} space-y-3`}>
+            <h2 id="assigned" className="text-xl">
+              老師指派的任務
+            </h2>
+            <ul className="space-y-2.5">
+              {assignments.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] bg-[#F6EFE2] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold">{item.title}</p>
+                    <p className="text-sm text-muted">
+                      {item.zone}
+                      {item.due_on ? `・期限 ${formatDue(item.due_on)}` : ""}
+                    </p>
+                    {item.note ? (
+                      <p className="text-sm text-ink/80">{item.note}</p>
+                    ) : null}
+                  </div>
+                  {item.status === "done" ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-ok-soft px-3 py-1 text-sm font-bold text-ok">
+                      <Check size={16} aria-hidden /> 已完成
+                    </span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      {item.status === "overdue" ? (
+                        <span className="rounded-full bg-[#FCEDE6] px-3 py-1 text-sm font-bold text-[#8a3b22]">
+                          已過期限
+                        </span>
+                      ) : null}
+                      <form
+                        action={startLevel.bind(
+                          null,
+                          item.level_id,
+                          "normal",
+                          undefined,
+                        )}
+                      >
+                        <SubmitButton
+                          pendingText="準備中…"
+                          aria-label={`開始任務：${item.title}`}
+                          className="rounded-full"
+                        >
+                          開始
+                        </SubmitButton>
+                      </form>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[13px] text-muted">拿到 2 顆星就完成任務。</p>
+          </section>
+        ) : null}
 
         <section aria-labelledby="islands" className="space-y-4">
           <h2 id="islands" className="text-2xl">
@@ -355,4 +463,65 @@ export default async function WorldMapPage() {
       </main>
     </div>
   );
+}
+
+type StudentAssignment = {
+  id: string;
+  level_id: string;
+  title: string;
+  zone: string;
+  note: string | null;
+  due_on: string | null;
+  status: AssignmentStatus;
+};
+
+/**
+ * 學生的指派任務（RLS 只回傳自己的、且關卡學生看得到的）。
+ * 未完成的依期限排在前面；已完成的只顯示最近 3 個。
+ */
+async function loadAssignments(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+): Promise<StudentAssignment[]> {
+  const { data: rows } = await supabase
+    .from("assignments")
+    .select(
+      "id, level_id, note, due_on, created_at, game_levels!inner(title, island_zones!inner(name))",
+    )
+    .eq("is_active", true)
+    .order("created_at", { ascending: false });
+  if (!rows?.length) return [];
+  const { data: attempts } = await supabase
+    .from("game_sessions")
+    .select("level_id, completed_at, stars_earned")
+    .in("level_id", [...new Set(rows.map((row) => row.level_id))])
+    .in("mode", ["normal", "retry_all"])
+    .eq("status", "completed");
+  const now = new Date();
+  // 同一關同時指派給班級與個人時只顯示一次（最新的那筆）。
+  const latest = rows.filter((row, index) => rows.findIndex((other) => other.level_id === row.level_id) === index);
+  const items = latest.map((row) => {
+    const level = row.game_levels as unknown as {
+      title: string;
+      island_zones: { name: string };
+    };
+    return {
+      id: row.id,
+      level_id: row.level_id,
+      title: level.title,
+      zone: level.island_zones.name,
+      note: row.note,
+      due_on: row.due_on,
+      created_at: row.created_at,
+      status: assignmentStatus(
+        row,
+        (attempts ?? []).filter((attempt) => attempt.level_id === row.level_id),
+        now,
+      ),
+    };
+  });
+  const pending = items
+    .filter((item) => item.status !== "done")
+    .sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999"));
+  const done = items.filter((item) => item.status === "done").slice(0, 3);
+  return [...pending, ...done];
 }

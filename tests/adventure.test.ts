@@ -81,3 +81,15 @@ describe("區域範本", () => {
     expect(ZONE_TEMPLATES.kids.at(-1)).toEqual({ name: "Final Boss Challenge", theme: "boss" });
   });
 });
+
+describe("指派的關卡", () => {
+  it("老師指派的關卡不受解鎖條件限制", () => {
+    const levels = [
+      { id: "a", order_index: 1, unlock_rule: "previous_complete" as const },
+      { id: "b", order_index: 2, unlock_rule: "previous_complete" as const },
+      { id: "c", order_index: 3, unlock_rule: "previous_two_stars" as const },
+    ];
+    const states = computeLevelStates(levels, new Map(), new Set(["c"]));
+    expect(states.map((state) => state.status)).toEqual(["current", "locked", "open"]);
+  });
+});

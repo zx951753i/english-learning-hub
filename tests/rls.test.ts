@@ -660,3 +660,106 @@ describe("Phase 4 冒險世界", () => {
     ).rejects.toThrow(/questions_ai_generated_is_draft/);
   });
 });
+
+describe("Phase 5 任務與錯題複習", () => {
+  const book = "20000000-0000-4000-8000-00000000000a";
+  let level = "";
+  const ids: Record<string, string> = {};
+
+  beforeAll(async () => {
+    const [l] = await rows(`select l.id from public.game_levels l join public.games g on g.id = l.game_id
+      where g.textbook_id = '${book}' limit 1`);
+    level = l.id as string;
+    const insert = async (name: string, target: string) => {
+      const [row] = await rows(`insert into public.assignments (level_id, ${target}) returning id`);
+      ids[name] = row.id as string;
+    };
+    await insert("classA", `class_id) values ('${level}', '${classA}'`);
+    await insert("classB", `class_id) values ('${level}', '${classB}'`);
+    await insert("archived", `class_id) values ('${level}', '${archivedClass}'`);
+    await insert("personalA", `student_id) values ('${level}', '${studentA}'`);
+    await insert("personalB", `student_id) values ('${level}', '${studentB}'`);
+  });
+
+  it("學生只看得到指派給自己或所屬班級的任務（封存班不算）", async () => {
+    const a = await as("authenticated", studentA, () => rows("select id from public.assignments order by id"));
+    expect(a.map((r) => r.id).sort()).toEqual([ids.classA, ids.personalA].sort());
+    const b = await as("authenticated", studentB, () => rows("select id from public.assignments"));
+    expect(b.map((r) => r.id).sort()).toEqual([ids.classB, ids.personalB].sort());
+    const off = await as("authenticated", inactive, () => rows("select id from public.assignments"));
+    expect(off).toEqual([]);
+  });
+
+  it("停用的任務學生看不到；離開班級後也看不到", async () => {
+    await db.exec(`update public.assignments set is_active = false where id = '${ids.personalA}'`);
+    await db.exec(`update public.student_classes set left_at = now() where student_id = '${studentA}' and class_id = '${classA}'`);
+    const a = await as("authenticated", studentA, () => rows("select id from public.assignments"));
+    await db.exec(`update public.assignments set is_active = true where id = '${ids.personalA}'`);
+    await db.exec(`update public.student_classes set left_at = null where student_id = '${studentA}' and class_id = '${classA}'`);
+    expect(a).toEqual([]);
+  });
+
+  it("學生不能建立、修改或刪除任務", async () => {
+    await expect(
+      as("authenticated", studentA, () =>
+        rows(`insert into public.assignments (level_id, student_id) values ('${level}', '${studentA}')`),
+      ),
+    ).rejects.toThrow(/row-level security/);
+    await as("authenticated", studentA, () => db.exec(`update public.assignments set note = 'x'`));
+    await as("authenticated", studentA, () => db.exec(`delete from public.assignments`));
+    const [count] = await rows(`select count(*)::int as n from public.assignments where note is null`);
+    expect(count.n).toBe(5);
+  });
+
+  it("任務只能指派一個對象，且個人對象必須是學生", async () => {
+    await expect(rows(`insert into public.assignments (level_id) values ('${level}')`)).rejects.toThrow(/one_target/);
+    await expect(
+      rows(`insert into public.assignments (level_id, class_id, student_id) values ('${level}', '${classA}', '${studentA}')`),
+    ).rejects.toThrow(/one_target/);
+    await expect(
+      rows(`insert into public.assignments (level_id, student_id) values ('${level}', '${teacher}')`),
+    ).rejects.toThrow(/only target students/);
+  });
+
+  it("刪除關卡時任務一併刪除", async () => {
+    const [g] = await rows(`select game_id from public.game_levels where id = '${level}'`);
+    const [z] = await rows(`select zone_id from public.game_levels where id = '${level}'`);
+    const [copy] = await rows(`insert into public.games (game_type, title, stage_id, textbook_id, unit_id)
+      select game_type, 'tmp', stage_id, textbook_id, unit_id from public.games where id = '${g.game_id}' returning id`);
+    const [tmp] = await rows(`insert into public.game_levels (zone_id, game_id, title, order_index)
+      values ('${z.zone_id}', '${copy.id}', 'tmp', 99) returning id`);
+    await rows(`insert into public.assignments (level_id, student_id) values ('${tmp.id}', '${studentA}')`);
+    await db.exec(`delete from public.game_levels where id = '${tmp.id}'`);
+    const left = await rows(`select id from public.assignments where level_id = '${tmp.id}'`);
+    expect(left).toEqual([]);
+  });
+
+  it("錯題複習局可以不綁定遊戲與單元；一般遊戲仍必須綁定", async () => {
+    const [stage] = await rows(`select stage_id from public.textbooks where id = '${book}'`);
+    const [review] = await rows(`insert into public.game_sessions
+      (student_id, game_type, stage_id, textbook_id, mode, question_total)
+      values ('${studentA}', 'word_spelling', '${stage.stage_id}', '${book}', 'review', 3) returning id`);
+    expect(review.id).toBeTruthy();
+    await expect(
+      rows(`insert into public.game_sessions (student_id, game_type, stage_id, textbook_id, mode, question_total)
+        values ('${studentA}', 'word_spelling', '${stage.stage_id}', '${book}', 'normal', 3)`),
+    ).rejects.toThrow(/review_shape/);
+    await db.exec(`delete from public.game_sessions where id = '${review.id}'`);
+  });
+
+  it("學生不能自己建立錯題複習局", async () => {
+    await expect(
+      as("authenticated", studentA, () =>
+        rows(`insert into public.game_sessions (student_id, game_type, stage_id, textbook_id, mode, question_total)
+          select '${studentA}', 'word_spelling', stage_id, id, 'review', 3 from public.textbooks where id = '${book}'`),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
+  it("遷移可以重複執行", async () => {
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261108000001_phase5_missions.sql"), "utf8");
+    await db.exec(sql);
+    const [count] = await rows(`select count(*)::int as n from public.assignments`);
+    expect(count.n).toBe(5);
+  });
+});

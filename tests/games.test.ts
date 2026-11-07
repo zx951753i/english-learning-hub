@@ -118,7 +118,7 @@ describe("計分與錯題", () => {
     expect(days(stats.next_review_at)).toBe(1);
   });
 
-  it("連續答對 3 次後移出錯題，間隔 3、7、14 天", () => {
+  it("連續答對 2 次後移出錯題，複習間隔 3、7、14 天", () => {
     let stats = { ...nextStats(emptyStats, false, now) };
     const gaps: number[] = [];
     const open: boolean[] = [];
@@ -128,7 +128,7 @@ describe("計分與錯題", () => {
       open.push(stats.is_open_mistake);
     }
     expect(gaps).toEqual([3, 7, 14]);
-    expect(open).toEqual([true, true, false]);
+    expect(open).toEqual([true, false, false]);
   });
 
   it("答對從未錯過的題目不會變成錯題", () => {

@@ -5,7 +5,9 @@ import { loadZoneLevels } from "@/features/adventure/data";
 import { getCurrentProfile, requireTeacher, type Profile } from "@/features/auth/session";
 import { getGameDefinition } from "@/features/games/registry";
 import { emptyStats, nextStats, scoreFor } from "@/features/games/scoring";
-import { createSession, SESSION_MODES, type SessionMode } from "@/features/games/session-factory";
+import { createReviewSession, createSession, SESSION_MODES, type SessionMode } from "@/features/games/session-factory";
+import { awardMissionBadges, loadMistakeGroups } from "@/features/missions/data";
+import { parseGroupKey, REVIEW_SIZE } from "@/features/missions/rules";
 import type { GradingKey, QuestionRow } from "@/features/games/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -69,6 +71,28 @@ export async function startLevel(levelId: string, requestedMode: SessionMode, re
   if (!result.ok) {
     redirect(isTeacher ? `/teacher/islands/levels/${levelId}?error=${result.reason}` : `/zone/${level.zone_id}?error=${result.reason}`);
   }
+  redirect(`/play/${result.sessionId}`);
+}
+
+/** 學生從錯題本開始一局複習。題目只取自本人目前的錯題。 */
+export async function startReview(groupKey: string) {
+  const profile = await requireProfile();
+  if (profile.role !== "student") redirect("/teacher");
+  const parsed = parseGroupKey(groupKey);
+  if (!parsed) redirect("/mistakes");
+
+  const admin = createAdminClient();
+  const group = (await loadMistakeGroups(admin, profile.id)).find((item) => item.key === groupKey);
+  if (!group) redirect("/mistakes?error=empty");
+
+  const result = await createReviewSession(admin, {
+    studentId: profile.id,
+    gameType: group.game_type,
+    textbookId: group.textbook_id,
+    questionIds: group.questionIds,
+    size: REVIEW_SIZE,
+  });
+  if (!result.ok) redirect(`/mistakes?error=${result.reason}`);
   redirect(`/play/${result.sessionId}`);
 }
 
@@ -137,7 +161,7 @@ export async function submitAnswer(
     session_item_id: itemId,
     student_id: profile.id,
     textbook_id: session.textbook_id,
-    unit_id: session.unit_id,
+    unit_id: session.unit_id ?? snapshot.unit_id,
     topic_id: snapshot.topic_id,
     game_type: session.game_type,
     question_id: item.question_id,
@@ -170,12 +194,13 @@ export async function submitAnswer(
 
   if (finished) {
     const correct = answers?.filter((answer) => answer.is_correct).length ?? 0;
+    const score = scoreFor(correct, session.question_total);
     await admin
       .from("game_sessions")
       .update({
         status: "completed",
         correct_count: correct,
-        score: scoreFor(correct, session.question_total),
+        score,
         time_spent: Math.round(
           (answers?.reduce((sum, answer) => sum + answer.time_spent, 0) ?? 0) / 1000,
         ),
@@ -183,6 +208,7 @@ export async function submitAnswer(
       })
       .eq("id", sessionId);
     if (session.level_id) await admin.rpc("record_level_result", { p_session_id: sessionId });
+    await awardMissionBadges(admin, { id: sessionId, student_id: profile.id, mode: session.mode, score });
   }
 
   return { ok: true, isCorrect, correctAnswer: key.display, explanation, finished };

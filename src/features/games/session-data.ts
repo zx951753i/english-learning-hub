@@ -24,7 +24,7 @@ export async function loadOwnSession(sessionId: string) {
     admin,
     profile,
     session,
-    title: (session.games as unknown as { title: string }).title,
+    title: session.mode === "review" ? "錯題複習" : ((session.games as unknown as { title: string } | null)?.title ?? "遊戲"),
     theme: (session.learning_stages as unknown as { theme_key: string }).theme_key,
   };
 }

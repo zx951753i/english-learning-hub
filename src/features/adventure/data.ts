@@ -31,11 +31,14 @@ export async function loadZoneLevels(client: SupabaseClient, zoneId: string, stu
   if (error) throw new Error(error.message);
 
   const ids = (levels ?? []).map((level) => level.id);
-  const { data: progress } = ids.length
-    ? await client.from("student_progress").select("level_id, stars").eq("student_id", studentId).in("level_id", ids)
-    : { data: [] };
+  const [{ data: progress }, assigned] = await Promise.all([
+    ids.length
+      ? client.from("student_progress").select("level_id, stars").eq("student_id", studentId).in("level_id", ids)
+      : Promise.resolve({ data: [] as { level_id: string; stars: number }[] }),
+    assignedLevelIds(client, studentId, ids),
+  ]);
   const stars = new Map((progress ?? []).map((row) => [row.level_id as string, row.stars as number]));
-  const states = computeLevelStates(levels ?? [], stars);
+  const states = computeLevelStates(levels ?? [], stars, assigned);
 
   return (levels ?? []).map((level): ZoneLevel => {
     const game = level.games as unknown as { game_type: string; question_count: number };
@@ -52,4 +55,27 @@ export async function loadZoneLevels(client: SupabaseClient, zoneId: string, stu
       state: states.find((state) => state.id === level.id)!,
     };
   });
+}
+
+/**
+ * 指派給這位學生（個人或所屬班級）且仍有效的關卡。
+ * 用學生身分查詢時 RLS 已限制只回傳自己的任務；用 admin 時以 studentId 與班級另外篩選。
+ */
+export async function assignedLevelIds(client: SupabaseClient, studentId: string, levelIds: string[]) {
+  if (levelIds.length === 0) return new Set<string>();
+  const [{ data: memberships }, { data: rows }] = await Promise.all([
+    client
+      .from("student_classes")
+      .select("class_id, classes!inner(is_archived)")
+      .eq("student_id", studentId)
+      .is("left_at", null)
+      .eq("classes.is_archived", false),
+    client.from("assignments").select("level_id, class_id, student_id").eq("is_active", true).in("level_id", levelIds),
+  ]);
+  const classes = new Set((memberships ?? []).map((row) => row.class_id as string));
+  return new Set(
+    (rows ?? [])
+      .filter((row) => row.student_id === studentId || (row.class_id && classes.has(row.class_id as string)))
+      .map((row) => row.level_id as string),
+  );
 }
