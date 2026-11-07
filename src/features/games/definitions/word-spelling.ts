@@ -20,6 +20,7 @@ export const wordSpelling: GameDefinition = {
         renderer: "text_input" as const,
         prompt: String(question.content.meaning_zh ?? ""),
         speak: word(question),
+        audio: String(question.content.audio ?? "").trim() || undefined,
         image: String(question.content.image ?? "") || undefined,
         length: word(question).length,
       },

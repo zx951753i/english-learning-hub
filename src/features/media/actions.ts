@@ -4,28 +4,38 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireTeacher } from "@/features/auth/session";
 import {
-  detectImage,
+  detectMedia,
+  MAX_AUDIO_BYTES,
   MAX_IMAGE_BYTES,
   MEDIA_BUCKET,
   normalizeFileName,
+  type MediaKind,
 } from "@/features/media/rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type UploadResult = { ok: true; fileName: string } | { ok: false; error: string };
 
-/** 一次一張：Vercel 單次請求約 4.5 MB，由瀏覽器逐張送出。 */
-export async function uploadImage(formData: FormData): Promise<UploadResult> {
+/**
+ * 一次一個檔案：Vercel 單次請求約 4.5 MB，由瀏覽器逐一送出。
+ * expect 指定只接受圖片或音檔（題目欄位用）；未指定時兩者皆可（媒體庫）。
+ */
+export async function uploadMedia(formData: FormData, expect?: MediaKind): Promise<UploadResult> {
   const profile = await requireTeacher();
   const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "請選擇圖片。" };
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "請選擇檔案。" };
 
   const fileName = normalizeFileName(file.name);
   if (!fileName) return { ok: false, error: "檔名不正確。" };
-  if (file.size > MAX_IMAGE_BYTES) return { ok: false, error: `${fileName} 超過 2 MB。` };
+  if (file.size > MAX_AUDIO_BYTES) return { ok: false, error: `${fileName} 超過 4 MB。` };
 
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const image = detectImage(bytes);
-  if (!image) return { ok: false, error: `${fileName} 不是 PNG、JPG、WebP 或 GIF 圖片。` };
+  const image = detectMedia(bytes);
+  if (!image || (expect && image.kind !== expect)) {
+    const wanted =
+      expect === "image" ? "PNG、JPG、WebP 或 GIF 圖片" : expect === "audio" ? "MP3、M4A 或 WAV 音檔" : "支援的圖片或音檔";
+    return { ok: false, error: `${fileName} 不是${wanted}。` };
+  }
+  if (image.kind === "image" && file.size > MAX_IMAGE_BYTES) return { ok: false, error: `${fileName} 超過 2 MB。` };
 
   const admin = createAdminClient();
   const storagePath = `${crypto.randomUUID()}.${image.ext}`;
@@ -58,6 +68,15 @@ export async function uploadImage(formData: FormData): Promise<UploadResult> {
 
   revalidatePath("/teacher", "layout");
   return { ok: true, fileName };
+}
+
+/** 題目欄位的「上傳新圖片」。 */
+export async function uploadImage(formData: FormData) {
+  return uploadMedia(formData, "image");
+}
+
+export async function uploadAudio(formData: FormData) {
+  return uploadMedia(formData, "audio");
 }
 
 export async function deleteImage(id: string) {

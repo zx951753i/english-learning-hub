@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadEligibleQuestions } from "@/features/games/eligible";
+import { loadQuestionPools } from "@/features/games/eligible";
 import { getGameDefinition } from "@/features/games/registry";
 import { shuffle } from "@/features/games/shuffle";
 import type { QuestionRow } from "@/features/games/types";
@@ -22,12 +22,17 @@ export type GameConfig = {
 
 /** 可用題目：已確認、啟用、符合難度；關卡有指定題目時只用指定的。 */
 export async function loadLevelPool(admin: SupabaseClient, game: GameConfig, levelId?: string) {
-  const pool = await loadEligibleQuestions(admin, game);
-  if (!levelId) return pool;
+  return (await loadLevelPools(admin, game, levelId)).eligible;
+}
+
+/** 出題用的題目，以及干擾選項可用的整個單元同類題目（不受指定題目限制）。 */
+async function loadLevelPools(admin: SupabaseClient, game: GameConfig, levelId?: string) {
+  const { eligible, distractors } = await loadQuestionPools(admin, game);
+  if (!levelId) return { eligible, distractors };
   const { data: fixed } = await admin.from("level_questions").select("question_id").eq("level_id", levelId);
-  if (!fixed?.length) return pool;
+  if (!fixed?.length) return { eligible, distractors };
   const ids = new Set(fixed.map((row) => row.question_id));
-  return pool.filter((question) => ids.has(question.id));
+  return { eligible: eligible.filter((question) => ids.has(question.id)), distractors };
 }
 
 type Options = {
@@ -45,7 +50,7 @@ export async function createSession(admin: SupabaseClient, options: Options): Pr
   const definition = getGameDefinition(game.game_type);
   if (!definition) return { ok: false, reason: "not-enough" };
 
-  const pool = await loadLevelPool(admin, game, levelId);
+  const { eligible: pool, distractors } = await loadLevelPools(admin, game, levelId);
   if (pool.length < definition.minQuestions) return { ok: false, reason: "not-enough" };
 
   let selected = shuffle(pool, Math.random).slice(0, game.question_count);
@@ -61,7 +66,7 @@ export async function createSession(admin: SupabaseClient, options: Options): Pr
     if (selected.length === 0) return { ok: false, reason: "no-mistakes" };
   }
 
-  const rounds = definition.buildRounds(selected, pool, Math.random);
+  const rounds = definition.buildRounds(selected, distractors, Math.random);
   const { data: session, error } = await admin
     .from("game_sessions")
     .insert({
@@ -125,14 +130,17 @@ export async function createReviewSession(
   if (error) throw new Error(error.message);
   if (!book) return { ok: false, reason: "no-mistakes" };
 
-  const seen = new Set<string>();
-  const pool = ((poolRows ?? []) as QuestionRow[]).filter((question) => {
-    if (!definition.accepts(question)) return false;
-    const identity = definition.identity(question);
-    if (seen.has(identity)) return false;
-    seen.add(identity);
-    return true;
-  });
+  const unique = (rows: QuestionRow[]) => {
+    const seen = new Set<string>();
+    return rows.filter((question) => {
+      const identity = definition.identity(question);
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      return true;
+    });
+  };
+  const distractors = unique((poolRows ?? []) as QuestionRow[]);
+  const pool = unique(((poolRows ?? []) as QuestionRow[]).filter((question) => definition.accepts(question)));
 
   const wanted = new Set(options.questionIds);
   const mistakes = shuffle(pool.filter((question) => wanted.has(question.id)), Math.random).slice(0, options.size);
@@ -144,7 +152,7 @@ export async function createReviewSession(
   const selected = [...mistakes, ...filler];
   if (selected.length < definition.minQuestions) return { ok: false, reason: "not-enough" };
 
-  const rounds = definition.buildRounds(selected, pool, Math.random);
+  const rounds = definition.buildRounds(selected, distractors, Math.random);
   const { data: session, error: sessionError } = await admin
     .from("game_sessions")
     .insert({

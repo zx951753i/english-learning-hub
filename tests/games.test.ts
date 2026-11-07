@@ -30,11 +30,15 @@ const seeded = () => {
 const pool = [vocab("cat", "貓", "cat.png"), vocab("dog", "狗", "dog.png"), vocab("hat", "帽子"), vocab("bag", "包包"), vocab("pen", "筆")];
 
 describe("遊戲註冊", () => {
-  it("三款遊戲都已註冊", () => {
+  it("七款遊戲都已註冊", () => {
     expect(GAME_DEFINITIONS.map((game) => game.key)).toEqual([
       "alphabet_matching",
       "listen_and_choose",
       "word_spelling",
+      "picture_vocabulary",
+      "phonics_sound_match",
+      "sentence_builder",
+      "final_boss",
     ]);
     expect(getGameDefinition("nope")).toBeUndefined();
   });

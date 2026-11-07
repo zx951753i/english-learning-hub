@@ -35,6 +35,7 @@ export const listenAndChoose: GameDefinition = {
           renderer: "single_choice" as const,
           prompt: "聽聽看，選出正確答案",
           speak: word(question),
+          audio: String(question.content.audio ?? "").trim() || undefined,
           options,
         },
         gradingKey: { answer: correct.id, display: `${word(question)}｜${meaning(question)}` },

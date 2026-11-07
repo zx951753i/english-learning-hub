@@ -1,4 +1,5 @@
 import "server-only";
+import { isAudioMime } from "@/features/media/rules";
 import { createClient } from "@/lib/supabase/server";
 
 export type StageOption = { id: string; name: string; difficulty_labels: string[] };
@@ -41,8 +42,14 @@ export async function loadContentTree() {
   return { stages: (stages ?? []) as StageOption[], textbooks: tree as TextbookOption[] };
 }
 
-export async function loadMediaNames() {
+export type MediaNames = { images: string[]; audio: string[] };
+
+export async function loadMediaNames(): Promise<MediaNames> {
   const supabase = await createClient();
-  const { data } = await supabase.from("media_assets").select("file_name").order("file_name");
-  return data?.map((item) => item.file_name as string) ?? [];
+  const { data } = await supabase.from("media_assets").select("file_name, mime_type").order("file_name");
+  const rows = data ?? [];
+  return {
+    images: rows.filter((item) => !isAudioMime(item.mime_type)).map((item) => item.file_name as string),
+    audio: rows.filter((item) => isAudioMime(item.mime_type)).map((item) => item.file_name as string),
+  };
 }

@@ -32,15 +32,16 @@ export default async function PlayPage({ params }: { params: Promise<{ sessionId
   });
 
   const names = items.flatMap(({ round }) => {
-    if (round.renderer === "single_choice") return round.options.map((option) => option.image ?? "");
-    if (round.renderer === "text_input") return [round.image ?? ""];
+    if (round.renderer === "single_choice")
+      return [round.image ?? "", round.audio ?? "", ...round.options.map((option) => option.image ?? "")];
+    if (round.renderer === "text_input") return [round.image ?? "", round.audio ?? ""];
     return [];
   });
   const urls = await signImages(admin, names);
 
   return (
     <div data-stage={theme}>
-      <GameShell sessionId={sessionId} title={title} items={items} images={Object.fromEntries(urls)} />
+      <GameShell sessionId={sessionId} title={title} items={items} media={Object.fromEntries(urls)} />
     </div>
   );
 }

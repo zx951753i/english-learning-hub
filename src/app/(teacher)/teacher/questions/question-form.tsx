@@ -37,7 +37,7 @@ type Props = {
   stages: StageOption[];
   textbooks: TextbookOption[];
   initial: QuestionFormValues;
-  mediaNames: string[];
+  mediaNames: { images: string[]; audio: string[] };
 };
 
 export function QuestionForm({ stages, textbooks, initial, mediaNames }: Props) {
@@ -63,7 +63,12 @@ export function QuestionForm({ stages, textbooks, initial, mediaNames }: Props) 
   return (
     <ActionForm action={action} className="space-y-5">
       <datalist id="media-names">
-        {mediaNames.map((name) => (
+        {mediaNames.images.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <datalist id="audio-names">
+        {mediaNames.audio.map((name) => (
           <option key={name} value={name} />
         ))}
       </datalist>
@@ -145,7 +150,7 @@ export function QuestionForm({ stages, textbooks, initial, mediaNames }: Props) 
             required: field.required,
             defaultValue: initial.contentType === contentType ? initial.fields?.[field.key] : undefined,
           };
-          if (field.image) {
+          if (field.image || field.audio) {
             return (
               <ImageField
                 key={shared.key}
@@ -153,7 +158,8 @@ export function QuestionForm({ stages, textbooks, initial, mediaNames }: Props) 
                 name={shared.name}
                 hint={shared.hint}
                 defaultValue={shared.defaultValue}
-                listId="media-names"
+                listId={field.audio ? "audio-names" : "media-names"}
+                kind={field.audio ? "audio" : "image"}
               />
             );
           }

@@ -29,6 +29,8 @@ export type FieldDef = {
   conditional?: boolean;
   /** 值為媒體庫中的圖片檔名。 */
   image?: boolean;
+  /** 值為媒體庫中的音檔檔名。 */
+  audio?: boolean;
 };
 
 export type ContentType = {
@@ -79,6 +81,7 @@ export const CONTENT_TYPES: ContentType[] = [
       { key: "part_of_speech", label: "詞性", hint: "例如 n.、v.、adj." },
       { key: "example_sentence", label: "例句" },
       { key: "image", label: "圖片", image: true, hint: "媒體庫中的檔名，例如 apple.png" },
+      { key: "audio", label: "音檔", audio: true, hint: "媒體庫中的檔名，例如 apple.mp3；留空時使用內建發音" },
     ],
     build(values) {
       const word = clean(values.word);
@@ -90,6 +93,7 @@ export const CONTENT_TYPES: ContentType[] = [
           part_of_speech: clean(values.part_of_speech),
           example_sentence: clean(values.example_sentence),
           image: clean(values.image).toLowerCase(),
+          audio: clean(values.audio).toLowerCase(),
         },
         answerKey: { answer: word },
         summary: `${word}｜${clean(values.meaning_zh)}`,
@@ -101,6 +105,7 @@ export const CONTENT_TYPES: ContentType[] = [
       part_of_speech: text(content.part_of_speech),
       example_sentence: text(content.example_sentence),
       image: text(content.image),
+      audio: text(content.audio),
     }),
   }),
   defineType({
@@ -111,6 +116,7 @@ export const CONTENT_TYPES: ContentType[] = [
       { key: "letter", label: "字母或字母組合", required: true },
       { key: "sound", label: "發音", required: true, hint: "例如 /æ/" },
       { key: "example_words", label: "例字", required: true, hint: "以逗號分隔，例如 cat, hat" },
+      { key: "audio", label: "音檔", audio: true, hint: "例字的發音檔，例如 cat.mp3；留空時使用內建發音" },
     ],
     build(values) {
       const letter = clean(values.letter);
@@ -119,7 +125,7 @@ export const CONTENT_TYPES: ContentType[] = [
       if (words.length === 0) return { ok: false, errors: ["請至少填寫一個例字。"] };
       return {
         ok: true,
-        content: { letter, sound, example_words: words },
+        content: { letter, sound, example_words: words, audio: clean(values.audio).toLowerCase() },
         answerKey: { answer: sound },
         summary: `${letter} ${sound}｜${words.join(", ")}`,
       };
@@ -128,6 +134,7 @@ export const CONTENT_TYPES: ContentType[] = [
       letter: text(content.letter),
       sound: text(content.sound),
       example_words: strings(content.example_words).join(", "),
+      audio: text(content.audio),
     }),
   }),
   defineType({

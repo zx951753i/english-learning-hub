@@ -266,6 +266,8 @@ export async function createLevel(zoneId: string, _: FormState, formData: FormDa
   if ("error" in game) return { error: game.error };
   const level = readLevelRules(formData);
   if ("error" in level) return { error: level.error };
+  // Final Boss 一律顯示為終極挑戰關（地圖上的皇冠）。
+  if (gameType === "final_boss") level.rules.is_boss = true;
 
   const supabase = await createClient();
   const zone = await loadZone(supabase, zoneId);
@@ -313,7 +315,7 @@ export async function createLevelsForUnits(zoneId: string, formData: FormData) {
         two_star_percent: DEFAULT_TWO_STAR,
         three_star_percent: DEFAULT_THREE_STAR,
         unlock_rule: "previous_complete",
-        is_boss: false,
+        is_boss: definition.key === "final_boss",
       },
       order: order++,
     });

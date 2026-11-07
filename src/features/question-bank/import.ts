@@ -15,8 +15,10 @@ export type ImportContext = {
     passages: { id: string; title: string }[];
   }[];
   difficultyLabels: string[];
-  /** 媒體庫內的小寫檔名。 */
+  /** 媒體庫內的小寫檔名（圖片）。 */
   mediaNames?: Set<string>;
+  /** 媒體庫內的小寫檔名（音檔）。 */
+  audioNames?: Set<string>;
 };
 
 export type ImportRow = {
@@ -144,6 +146,12 @@ export function parseQuestionTable(
       const name = (values[field.key] ?? "").toLowerCase();
       if (name && context.mediaNames && !context.mediaNames.has(name)) {
         rowErrors.push(`媒體庫找不到圖片「${values[field.key]}」。`);
+      }
+    }
+    for (const field of type.fields.filter((item) => item.audio)) {
+      const name = (values[field.key] ?? "").toLowerCase();
+      if (name && context.audioNames && !context.audioNames.has(name)) {
+        rowErrors.push(`媒體庫找不到音檔「${values[field.key]}」。`);
       }
     }
     const built = type.build(values);

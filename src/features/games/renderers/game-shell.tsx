@@ -19,12 +19,35 @@ type Props = {
   sessionId: string;
   title: string;
   items: PlayItem[];
-  images: Record<string, string>;
+  /** 題目用到的圖片與音檔：檔名 → 限時連結。 */
+  media: Record<string, string>;
 };
+
+type Sound = { speak?: string; audio?: string };
+
+/** 這一題要播放的聲音：老師上傳的音檔優先，沒有時用內建語音。 */
+const soundOf = (round: PublicRound | undefined): Sound =>
+  round && (round.renderer === "single_choice" || round.renderer === "text_input")
+    ? { speak: round.speak, audio: round.audio }
+    : {};
+
+/** 必須在點擊當下呼叫（iPhone 限制）。回傳是否有可播放的聲音。 */
+function playSound(sound: Sound, media: Record<string, string>) {
+  const url = sound.audio ? media[sound.audio] : undefined;
+  if (url) {
+    const player = new Audio(url);
+    player.play().catch(() => {
+      if (sound.speak) speakEnglish(sound.speak);
+    });
+    return true;
+  }
+  return sound.speak ? speakEnglish(sound.speak) : false;
+}
 
 type Feedback = Extract<AnswerResult, { ok: true }>;
 
-function ListenButton({ text }: { text: string }) {
+function ListenButton({ sound, media }: { sound: Sound; media: Record<string, string> }) {
+  const hasAudio = Boolean(sound.audio && media[sound.audio]);
   const supported = useSyncExternalStore(
     () => () => {},
     canSpeak,
@@ -32,15 +55,84 @@ function ListenButton({ text }: { text: string }) {
   );
   return (
     <div className="space-y-1">
-      <Button variant="secondary" onClick={() => speakEnglish(text)} className="text-lg">
+      <Button variant="secondary" onClick={() => playSound(sound, media)} className="text-lg">
         <Volume2 size={22} aria-hidden />
         聽發音
       </Button>
-      {supported ? (
+      {hasAudio || supported ? (
         <p className="text-sm text-muted">沒有聲音時，請確認手機沒有開啟靜音並調高音量。</p>
       ) : (
         <p className="text-sm text-danger">這個瀏覽器不支援語音朗讀。</p>
       )}
+    </div>
+  );
+}
+
+function ChunkBoard({
+  chunks,
+  disabled,
+  onSubmit,
+  pending,
+}: {
+  chunks: { id: string; label: string }[];
+  disabled: boolean;
+  pending: boolean;
+  onSubmit: (sentence: string) => void;
+}) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const label = (id: string) => chunks.find((chunk) => chunk.id === id)?.label ?? "";
+  const left = chunks.filter((chunk) => !picked.includes(chunk.id));
+  const complete = picked.length === chunks.length;
+
+  return (
+    <div className="space-y-4">
+      <div
+        aria-label="我排的句子"
+        className="flex min-h-20 flex-wrap content-start gap-2 rounded-card border-2 border-dashed border-sky-deep bg-white p-3"
+      >
+        {picked.length === 0 ? <span className="self-center text-muted">依序點下面的詞塊</span> : null}
+        {picked.map((id) => (
+          <button
+            key={id}
+            type="button"
+            disabled={disabled}
+            onClick={() => setPicked((current) => current.filter((item) => item !== id))}
+            aria-label={`移除 ${label(id)}`}
+            className="min-h-12 rounded-control border-2 border-navy bg-sky px-3.5 text-xl font-medium text-navy"
+          >
+            {label(id)}
+          </button>
+        ))}
+      </div>
+      <div aria-label="詞塊" className="flex flex-wrap gap-2">
+        {left.map((chunk) => (
+          <button
+            key={chunk.id}
+            type="button"
+            disabled={disabled}
+            onClick={() => setPicked((current) => [...current, chunk.id])}
+            className="min-h-12 rounded-control border-2 border-line bg-paper px-3.5 text-xl font-medium hover:border-sky-deep"
+          >
+            {chunk.label}
+          </button>
+        ))}
+      </div>
+      {!disabled ? (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            onClick={() => onSubmit(picked.map(label).join(" "))}
+            disabled={pending || !complete}
+            className="w-full sm:w-auto"
+          >
+            {pending ? "批改中…" : "送出答案"}
+          </Button>
+          {picked.length > 0 ? (
+            <Button variant="ghost" onClick={() => setPicked([])}>
+              重來
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -89,7 +181,7 @@ function useAnswer(sessionId: string) {
   return { send, pending, error };
 }
 
-function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
+function SequentialGame({ sessionId, items, media }: Omit<Props, "title">) {
   const router = useRouter();
   const queue = items.filter((item) => !item.answered);
   const done = items.length - queue.length;
@@ -100,12 +192,13 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
   const { send, pending, error } = useAnswer(sessionId);
 
   const item = queue[index];
-  const speak = item?.round.renderer !== "match_pairs" ? item?.round.speak : undefined;
+  const sound = soundOf(item?.round);
 
   // 第一題自動播放：電腦可用，iPhone 會擋下，需按「聽發音」。之後的題目在按「下一題」時播放。
   useEffect(() => {
-    if (index === 0 && speak) speakEnglish(speak);
-  }, [index, speak]);
+    if (index === 0) playSound(sound, media);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 只在進入第一題時播放一次
+  }, [index]);
 
   useEffect(() => {
     if (!item) router.replace(`/play/${sessionId}/result`);
@@ -119,8 +212,7 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
       router.replace(`/play/${sessionId}/result`);
       return;
     }
-    const upcoming = queue[index + 1]?.round;
-    if (upcoming && upcoming.renderer !== "match_pairs" && upcoming.speak) speakEnglish(upcoming.speak);
+    playSound(soundOf(queue[index + 1]?.round), media);
     setFeedback(null);
     setSelected("");
     setTyped("");
@@ -130,13 +222,29 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
   return (
     <div className="space-y-5">
       <Progress current={done + index + (feedback ? 1 : 0)} total={items.length} />
-      {round.renderer === "single_choice" ? (
+      {round.renderer === "order_chunks" ? (
+        <>
+          <p className="text-2xl font-medium text-navy">{round.prompt}</p>
+          {round.instruction ? <p className="text-muted">{round.instruction}</p> : null}
+          <ChunkBoard
+            key={item.id}
+            chunks={round.chunks}
+            pending={pending}
+            disabled={pending || Boolean(feedback)}
+            onSubmit={(sentence) => send(item.id, sentence, setFeedback)}
+          />
+        </>
+      ) : round.renderer === "single_choice" ? (
         <>
           <p className="text-xl font-medium text-navy">{round.prompt}</p>
-          {round.speak ? <ListenButton text={round.speak} /> : null}
+          {round.image && media[round.image] ? (
+            // eslint-disable-next-line @next/next/no-img-element -- 私有限時連結，不經過圖片最佳化
+            <img src={media[round.image]} alt="題目圖片" className="mx-auto size-48 rounded-card object-contain" />
+          ) : null}
+          {round.speak || round.audio ? <ListenButton sound={sound} media={media} /> : null}
           <div className="grid grid-cols-2 gap-3">
             {round.options.map((option) => {
-              const url = option.image ? images[option.image] : undefined;
+              const url = option.image ? media[option.image] : undefined;
               return (
                 <button
                   key={option.id}
@@ -147,7 +255,9 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
                     setSelected(option.id);
                     send(item.id, option.id, setFeedback);
                   }}
-                  className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-card border-2 bg-paper p-3 text-lg font-medium transition-colors disabled:cursor-default ${
+                  className={`flex min-h-24 flex-col items-center justify-center gap-2 rounded-card border-2 bg-paper p-3 font-medium transition-colors disabled:cursor-default ${
+                    round.large ? "text-4xl" : "text-lg"
+                  } ${
                     selected === option.id ? "border-navy" : "border-line hover:border-sky-deep"
                   }`}
                 >
@@ -170,12 +280,12 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
             if (typed.trim()) send(item.id, typed, setFeedback);
           }}
         >
-          {round.image && images[round.image] ? (
+          {round.image && media[round.image] ? (
             // eslint-disable-next-line @next/next/no-img-element -- 私有限時連結，不經過圖片最佳化
-            <img src={images[round.image]} alt="" className="size-40 rounded-card object-contain" />
+            <img src={media[round.image]} alt="" className="size-40 rounded-card object-contain" />
           ) : null}
           <p className="text-2xl font-medium text-navy">{round.prompt}</p>
-          {round.speak ? <ListenButton text={round.speak} /> : null}
+          {round.speak || round.audio ? <ListenButton sound={sound} media={media} /> : null}
           <label className="block space-y-1.5">
             <span className="font-medium">拼出單字（{round.length} 個字元）</span>
             <input
@@ -203,7 +313,7 @@ function SequentialGame({ sessionId, items, images }: Omit<Props, "title">) {
   );
 }
 
-function MatchingGame({ sessionId, items }: Omit<Props, "title" | "images">) {
+function MatchingGame({ sessionId, items }: Omit<Props, "title" | "media">) {
   const router = useRouter();
   const [activeId, setActiveId] = useState<string | null>(null);
   const [results, setResults] = useState<Record<string, { isCorrect: boolean; right: string }>>({});
@@ -305,14 +415,14 @@ function Progress({ current, total }: { current: number; total: number }) {
   );
 }
 
-export function GameShell({ sessionId, title, items, images }: Props) {
+export function GameShell({ sessionId, title, items, media }: Props) {
   return (
     <div className="mx-auto w-full max-w-xl space-y-5 px-4 py-6">
       <h1 className="text-2xl">{title}</h1>
       {items[0]?.round.renderer === "match_pairs" ? (
         <MatchingGame sessionId={sessionId} items={items} />
       ) : (
-        <SequentialGame sessionId={sessionId} items={items} images={images} />
+        <SequentialGame sessionId={sessionId} items={items} media={media} />
       )}
     </div>
   );

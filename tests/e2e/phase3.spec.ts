@@ -19,11 +19,11 @@ test.describe.serial("Phase 3 遊戲（經由關卡）", () => {
 
   test("媒體庫：上傳圖片，拒絕偽裝檔案", async ({ page }) => {
     await page.goto("/teacher/media");
-    const input = page.getByLabel("選擇圖片（可多選）");
+    const input = page.getByLabel("選擇圖片或音檔（可多選）");
     await input.setInputFiles({ name: image, mimeType: "image/png", buffer: png });
-    await expect(page.getByText("已上傳 1 張圖片")).toBeVisible();
+    await expect(page.getByText("已上傳 1 個檔案")).toBeVisible();
     await input.setInputFiles({ name: "fake.png", mimeType: "image/png", buffer: Buffer.from("<svg/>") });
-    await expect(alertOn(page)).toContainText("不是 PNG");
+    await expect(alertOn(page)).toContainText("不是支援的圖片或音檔");
   });
 
   test("準備教材、題目、班級與區域", async ({ page }) => {

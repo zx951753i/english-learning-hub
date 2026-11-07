@@ -763,3 +763,24 @@ describe("Phase 5 任務與錯題複習", () => {
     expect(count.n).toBe(5);
   });
 });
+
+describe("Phase 6 新遊戲與音檔", () => {
+  it("新遊戲類型已註冊，與程式的遊戲清單一致", async () => {
+    const { GAME_DEFINITIONS } = await import("@/features/games/registry");
+    const types = await rows("select key from public.game_types order by key");
+    expect(types.map((row) => row.key).sort()).toEqual(GAME_DEFINITIONS.map((game) => game.key).sort());
+  });
+
+  it("媒體庫接受音檔，單檔 4 MB", async () => {
+    const [bucket] = await rows(`select file_size_limit, allowed_mime_types from storage.buckets where id = 'question-media'`);
+    expect(bucket.file_size_limit).toBe(4194304);
+    expect(bucket.allowed_mime_types).toEqual(expect.arrayContaining(["audio/mpeg", "audio/mp4", "audio/wav", "image/png"]));
+  });
+
+  it("遷移可以重複執行", async () => {
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261108000002_phase6_games_audio.sql"), "utf8");
+    await db.exec(sql);
+    const [count] = await rows(`select count(*)::int as n from public.game_types where key = 'final_boss'`);
+    expect(count.n).toBe(1);
+  });
+});

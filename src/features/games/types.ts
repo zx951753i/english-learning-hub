@@ -1,4 +1,4 @@
-export type RendererKey = "match_pairs" | "single_choice" | "text_input";
+export type RendererKey = "match_pairs" | "single_choice" | "text_input" | "order_chunks";
 
 export type QuestionRow = {
   id: string;
@@ -18,11 +18,31 @@ export type PublicRound =
       renderer: "single_choice";
       prompt: string;
       speak?: string;
+      /** 老師上傳的音檔檔名；有音檔時取代內建語音。 */
+      audio?: string;
+      /** 題目圖片（例如看圖選單字）。 */
+      image?: string;
+      /** 選項以大字顯示（例如字母）。 */
+      large?: boolean;
       options: { id: string; label: string; image?: string }[];
     }
-  | { renderer: "text_input"; prompt: string; speak?: string; image?: string; length: number };
+  | { renderer: "text_input"; prompt: string; speak?: string; audio?: string; image?: string; length: number }
+  | {
+      renderer: "order_chunks";
+      prompt: string;
+      instruction?: string;
+      /** 已打亂順序的詞塊；id 只用來追蹤點選，不代表正確順序。 */
+      chunks: { id: string; label: string }[];
+    };
 
-export type GradingKey = { answer: string; display: string };
+export type GradingKey = {
+  answer: string;
+  display: string;
+  /** 其他可接受的答案（已正規化）。 */
+  accepted?: string[];
+  /** Final Boss：這一題實際使用的遊戲。 */
+  game?: string;
+};
 
 export type BuiltRound = { publicRound: PublicRound; gradingKey: GradingKey };
 
@@ -30,7 +50,8 @@ export type GameDefinition = {
   key: string;
   label: string;
   description: string;
-  renderer: RendererKey;
+  /** mixed：一局內每題的介面不同（Final Boss）。 */
+  renderer: RendererKey | "mixed";
   contentTypes: string[];
   stages: string[];
   minQuestions: number;

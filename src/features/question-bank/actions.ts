@@ -1,5 +1,6 @@
 "use server";
 
+import { isAudioMime } from "@/features/media/rules";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import readXlsx from "read-excel-file/node";
@@ -213,10 +214,11 @@ export async function previewImport(_: PreviewState, formData: FormData): Promis
   if (!book || !stage) return { errors: [{ line: 0, message: "找不到這本教材。" }] };
 
   const supabase = await createClient();
-  const { data: media } = await supabase.from("media_assets").select("file_name");
+  const { data: media } = await supabase.from("media_assets").select("file_name, mime_type");
 
   const { rows, errors } = parseQuestionTable(table, type, {
-    mediaNames: new Set(media?.map((item) => item.file_name)),
+    mediaNames: new Set(media?.filter((item) => !isAudioMime(item.mime_type)).map((item) => item.file_name)),
+    audioNames: new Set(media?.filter((item) => isAudioMime(item.mime_type)).map((item) => item.file_name)),
     difficultyLabels: stage.difficulty_labels,
     units: book.units.map((unit) => ({
       id: unit.id,
