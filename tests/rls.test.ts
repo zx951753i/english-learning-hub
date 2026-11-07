@@ -429,10 +429,11 @@ describe("Phase 3 遊戲與作答", () => {
     `);
   });
 
-  it("學生只看得到已授權且已發布的遊戲", async () => {
+  it("遊戲還沒放上地圖（沒有已發布關卡）時，學生讀不到", async () => {
+    // 已授權且可見的情況在 Phase 4 測試（關卡建立後）驗證。
     const a = await as("authenticated", studentA, () => rows("select id from public.games"));
     const b = await as("authenticated", studentB, () => rows("select id from public.games"));
-    expect(a).toEqual([{ id: game }]);
+    expect(a).toEqual([]);
     expect(b).toEqual([]);
   });
 
@@ -479,7 +480,8 @@ describe("Phase 3 遊戲與作答", () => {
     await expect(
       as("authenticated", studentA, () =>
         rows(`insert into public.games (game_type, title, stage_id, textbook_id, unit_id)
-              select game_type, 'x', stage_id, textbook_id, unit_id from public.games limit 1`),
+              select 'word_spelling', 'x', t.stage_id, t.id, u.id
+              from public.units u join public.textbooks t on t.id = u.textbook_id limit 1`),
       ),
     ).rejects.toThrow(/row-level security/);
   });
@@ -497,5 +499,164 @@ describe("Phase 3 遊戲與作答", () => {
       rows(`insert into public.answers (session_id, session_item_id, student_id, textbook_id, unit_id, game_type, question_id, selected_answer, is_correct)
             select session_id, session_item_id, student_id, textbook_id, unit_id, game_type, question_id, selected_answer, is_correct from public.answers`),
     ).rejects.toThrow(/duplicate key/);
+  });
+});
+
+describe("Phase 4 冒險世界", () => {
+  const book = "20000000-0000-4000-8000-00000000000a";
+  const hiddenBook = "20000000-0000-4000-8000-00000000000b";
+  const game = "50000000-0000-4000-8000-00000000000a";
+  const draftGame = "50000000-0000-4000-8000-00000000000b";
+  const session = "60000000-0000-4000-8000-00000000000a";
+
+  let zone = "";
+  let level = "";
+
+  beforeAll(async () => {
+    // 遷移在測試資料建立前就已執行；在此重跑轉換段落，模擬已有遊戲與紀錄的正式資料庫。
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/20261107000002_phase4_adventure.sql"), "utf8");
+    await db.exec(sql.slice(sql.indexOf("-- 舊資料轉換")));
+    const [z] = await rows(`select id from public.island_zones where textbook_id = '${book}'`);
+    zone = z.id as string;
+    const [l] = await rows(`select id from public.game_levels where game_id = '${game}'`);
+    level = l.id as string;
+  });
+
+  it("舊遊戲已轉成練習區的關卡，發布狀態不變", async () => {
+    const levels = await rows(`select l.is_published, z.name from public.game_levels l
+      join public.island_zones z on z.id = l.zone_id where l.game_id in ('${game}', '${draftGame}')
+      order by l.is_published desc`);
+    expect(levels).toEqual([
+      { is_published: true, name: "練習區" },
+      { is_published: false, name: "練習區" },
+    ]);
+  });
+
+  it("舊的作答紀錄已連到關卡", async () => {
+    const [s] = await rows(`select level_id from public.game_sessions where id = '${session}'`);
+    expect(s.level_id).toBe(level);
+  });
+
+  it("三座島都有島名", async () => {
+    const result = await rows("select island_name from public.learning_stages order by order_index");
+    expect(result.map((r) => r.island_name)).toEqual([
+      "English Kids Island",
+      "English Junior Island",
+      "English Senior Island",
+    ]);
+  });
+
+  it("學生只看得到已授權、開放、已發布的區域與關卡", async () => {
+    const zonesA = await as("authenticated", studentA, () => rows("select id from public.island_zones"));
+    const levelsA = await as("authenticated", studentA, () => rows("select id from public.game_levels"));
+    const zonesB = await as("authenticated", studentB, () => rows("select id from public.island_zones"));
+    expect(zonesA).toEqual([{ id: zone }]);
+    expect(levelsA).toEqual([{ id: level }]);
+    expect(zonesB).toEqual([]);
+
+    await db.exec(`update public.island_zones set is_open = false where id = '${zone}'`);
+    const closed = await as("authenticated", studentA, () => rows("select id from public.game_levels"));
+    await db.exec(`update public.island_zones set is_open = true where id = '${zone}'`);
+    expect(closed).toEqual([]);
+  });
+
+  it("遊戲設定跟著關卡發布：關卡未發布或區域關閉時學生讀不到", async () => {
+    const games = () => as("authenticated", studentA, () => rows("select id from public.games order by id"));
+    expect(await games()).toEqual([{ id: game }]);
+    await db.exec(`update public.game_levels set is_published = false where id = '${level}'`);
+    const unpublished = await games();
+    await db.exec(`update public.game_levels set is_published = true where id = '${level}'`);
+    await db.exec(`update public.island_zones set is_open = false where id = '${zone}'`);
+    const closed = await games();
+    await db.exec(`update public.island_zones set is_open = true where id = '${zone}'`);
+    expect(unpublished).toEqual([]);
+    expect(closed).toEqual([]);
+    expect(await as("authenticated", studentB, () => rows("select id from public.games"))).toEqual([]);
+  });
+
+  it("學生讀不到指定題目清單", async () => {
+    await db.exec(`insert into public.level_questions (level_id, question_id)
+      values ('${level}', '40000000-0000-4000-8000-00000000000a')`);
+    const result = await as("authenticated", studentA, () => rows("select * from public.level_questions"));
+    expect(result).toEqual([]);
+  });
+
+  it("學生不能建立區域或關卡", async () => {
+    await expect(
+      as("authenticated", studentA, () =>
+        rows(`insert into public.island_zones (stage_id, textbook_id, name, theme_key, order_index)
+              select stage_id, id, 'x', 'forest', 9 from public.textbooks where id = '${book}'`),
+      ),
+    ).rejects.toThrow(/row-level security/);
+  });
+
+  it.each([
+    ["student_progress", `insert into public.student_progress (student_id, level_id, stars, best_score) values ('${studentA}', '${studentA}', 3, 100)`],
+    ["student_progress", `update public.student_progress set stars = 3`],
+    ["student_badges", `delete from public.student_badges`],
+    ["record_level_result", `select public.record_level_result('${session}')`],
+  ])("學生不能竄改 %s", async (_, sql) => {
+    await expect(as("authenticated", studentA, () => rows(sql))).rejects.toThrow(/permission denied/);
+  });
+
+  it("關卡的遊戲必須屬於同一本教材", async () => {
+    const [other] = await rows(`insert into public.island_zones (stage_id, textbook_id, name, theme_key, order_index)
+      select stage_id, id, 'x', 'forest', 5 from public.textbooks where id = '${hiddenBook}' returning id`);
+    await db.exec(`delete from public.game_levels where game_id = '${draftGame}'`);
+    await expect(
+      rows(`insert into public.game_levels (zone_id, game_id, title, order_index)
+            values ('${other.id}', '${draftGame}', 'x', 1)`),
+    ).rejects.toThrow(/zone textbook/);
+  });
+
+  it("結算：星星依門檻計算、只升不降、重送不重複發放", async () => {
+    const run = async (score: number, mode = "normal") => {
+      const [s] = await rows(`insert into public.game_sessions
+        (student_id, game_id, game_type, stage_id, textbook_id, unit_id, level_id, mode, question_total,
+         status, score, correct_count, completed_at)
+        select '${studentB}', g.id, g.game_type, g.stage_id, g.textbook_id, g.unit_id, '${level}', '${mode}', 10,
+          'completed', ${score}, 0, now() from public.games g where g.id = '${game}' returning id`);
+      return (await rows(`select public.record_level_result('${s.id}') as r`))[0].r as {
+        stars: number | null;
+        badges: string[];
+      };
+    };
+    const progress = async () =>
+      (await rows(`select stars, best_score, attempt_count from public.student_progress
+        where student_id = '${studentB}' and level_id = '${level}'`))[0];
+
+    expect(await run(59)).toEqual({ stars: 1, badges: ["first_mission"] });
+    expect(await run(60)).toEqual({ stars: 2, badges: [] });
+    expect(await run(100)).toEqual({ stars: 3, badges: ["perfect_score"] });
+    expect(await run(30)).toEqual({ stars: 1, badges: [] });
+    expect(await progress()).toEqual({ stars: 3, best_score: 100, attempt_count: 4 });
+
+    expect(await run(100, "retry_wrong")).toEqual({ stars: null, badges: [] });
+    expect(await run(100, "preview")).toEqual({ stars: null, badges: [] });
+    expect((await progress()).attempt_count).toBe(4);
+
+    const [last] = await rows(`select id from public.game_sessions where student_id = '${studentB}'
+      and mode = 'normal' and score = 100`);
+    const again = await rows(`select public.record_level_result('${last.id}') as r`);
+    expect(again[0].r).toEqual({ stars: 3, badges: ["perfect_score"] });
+    expect((await progress()).attempt_count).toBe(4);
+  });
+
+  it("學生只讀得到自己的進度與徽章", async () => {
+    const own = await as("authenticated", studentB, () => rows("select level_id from public.student_progress"));
+    const other = await as("authenticated", studentA, () =>
+      rows(`select * from public.student_progress where student_id = '${studentB}'`),
+    );
+    const badgesB = await as("authenticated", studentB, () => rows("select badge_id from public.student_badges"));
+    expect(own).toHaveLength(1);
+    expect(other).toEqual([]);
+    expect(badgesB).toHaveLength(2);
+  });
+
+  it("AI 生成的題目不能直接確認啟用", async () => {
+    await expect(
+      rows(`update public.questions set source_type = 'ai_generated', review_status = 'confirmed'
+            where id = '40000000-0000-4000-8000-00000000000a'`),
+    ).rejects.toThrow(/questions_ai_generated_is_draft/);
   });
 });

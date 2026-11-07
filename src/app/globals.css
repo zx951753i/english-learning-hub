@@ -66,13 +66,15 @@ body {
   line-height: 1.6;
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--font-serif);
-  font-weight: var(--heading-weight);
-  color: var(--navy);
-  line-height: 1.25;
+@layer base {
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-serif);
+    font-weight: var(--heading-weight);
+    color: var(--navy);
+    line-height: 1.25;
+  }
 }
 
 :focus-visible {

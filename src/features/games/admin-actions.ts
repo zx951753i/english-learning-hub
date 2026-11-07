@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireTeacher } from "@/features/auth/session";
-import { getGameDefinition } from "@/features/games/registry";
 import { createClient } from "@/lib/supabase/server";
 
 export type GameFormState = { error?: string; saved?: boolean };
@@ -30,33 +29,6 @@ function validate(game: ReturnType<typeof readGame>) {
   return null;
 }
 
-export async function createGame(_: GameFormState, formData: FormData): Promise<GameFormState> {
-  await requireTeacher();
-  const game = readGame(formData);
-  const gameType = field(formData, "gameType");
-  const invalid = validate(game);
-  if (invalid) return { error: invalid };
-  if (!getGameDefinition(gameType)) return { error: "請選擇遊戲類型。" };
-
-  const supabase = await createClient();
-  const { data: unit } = await supabase
-    .from("units")
-    .select("textbook_id, stage_id")
-    .eq("id", game.unit_id)
-    .maybeSingle();
-  if (!unit) return { error: "找不到這個單元。" };
-
-  const { data, error } = await supabase
-    .from("games")
-    .insert({ ...game, game_type: gameType, textbook_id: unit.textbook_id, stage_id: unit.stage_id })
-    .select("id")
-    .single();
-  if (error) return { error: "建立失敗，請稍後再試。" };
-
-  revalidatePath("/teacher", "layout");
-  redirect(`/teacher/games/${data.id}`);
-}
-
 export async function updateGame(id: string, _: GameFormState, formData: FormData): Promise<GameFormState> {
   await requireTeacher();
   const { title, question_count, difficulty_min, difficulty_max } = readGame(formData);
@@ -71,14 +43,6 @@ export async function updateGame(id: string, _: GameFormState, formData: FormDat
   if (error) return { error: "更新失敗，請稍後再試。" };
   revalidatePath("/teacher", "layout");
   return { saved: true };
-}
-
-export async function setGamePublished(id: string, published: boolean) {
-  await requireTeacher();
-  const supabase = await createClient();
-  const { error } = await supabase.from("games").update({ is_published: published }).eq("id", id);
-  if (error) redirect(`/teacher/games/${id}?error=publish`);
-  revalidatePath("/", "layout");
 }
 
 export async function deleteGame(id: string) {

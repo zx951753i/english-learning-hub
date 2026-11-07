@@ -10,6 +10,7 @@ import {
   EXAM_BANDS,
   getContentType,
   isSourceType,
+  sourceAfterReview,
   type Values,
 } from "@/features/question-bank/content-types";
 import { loadContentTree } from "@/features/question-bank/data";
@@ -80,7 +81,7 @@ export async function saveQuestion(
     answer_key: built.answerKey,
     explanation_zh: explanation || null,
     search_text: built.summary,
-    source_type: sourceType,
+    source_type: sourceAfterReview(sourceType, confirmed),
     source_note: field(formData, "sourceNote") || null,
     review_status: confirmed ? "confirmed" : "draft",
     is_active: confirmed,
@@ -120,6 +121,10 @@ export async function applyBulkAction(formData: FormData) {
   let failed = false;
 
   if (action === "confirm") {
+    await base()
+      .update({ source_type: "ai_approved" })
+      .in("id", ids)
+      .eq("source_type", "ai_generated");
     const { error } = await base()
       .update({ review_status: "confirmed", is_active: true })
       .in("id", ids)
@@ -275,7 +280,7 @@ export async function confirmImport(batchId: string, formData: FormData) {
       answer_key: row.answerKey,
       explanation_zh: row.explanation,
       search_text: row.summary,
-      source_type: sourceType,
+      source_type: sourceAfterReview(sourceType, confirmed),
       source_note: row.sourceNote,
       review_status: confirmed ? "confirmed" : "draft",
       is_active: confirmed,

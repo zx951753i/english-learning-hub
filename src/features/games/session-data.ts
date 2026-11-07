@@ -13,7 +13,7 @@ export async function loadOwnSession(sessionId: string) {
   const { data: session } = await admin
     .from("game_sessions")
     .select(
-      "id, game_id, status, mode, question_total, correct_count, score, time_spent, games(title), learning_stages(theme_key)",
+      "id, game_id, level_id, status, mode, question_total, correct_count, score, time_spent, games(title), learning_stages(theme_key)",
     )
     .eq("id", sessionId)
     .eq("student_id", profile.id)

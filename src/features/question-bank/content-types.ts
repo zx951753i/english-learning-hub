@@ -361,10 +361,15 @@ export const getContentType = (key: string) => CONTENT_TYPES.find((type) => type
 export const contentTypeLabel = (key: string) => getContentType(key)?.label ?? key;
 
 export const SOURCE_TYPES = [
-  { key: "teacher_material", label: "老師提供的資料" },
-  { key: "teacher_original", label: "老師原創" },
-  { key: "ai_draft", label: "AI 草擬，待老師確認" },
+  { key: "teacher_material", label: "Teacher Material：老師提供的教材" },
+  { key: "teacher_original", label: "Teacher Original：老師確認的原創題目" },
+  { key: "ai_generated", label: "AI Generated：AI 生成，待老師確認" },
+  { key: "ai_approved", label: "AI Approved：AI 生成，已經老師審核" },
 ] as const;
+
+/** AI 生成的題目一經老師確認，就改標為 AI Approved。 */
+export const sourceAfterReview = (source: string, confirmed: boolean) =>
+  confirmed && source === "ai_generated" ? "ai_approved" : source;
 
 export const isSourceType = (value: string) =>
   SOURCE_TYPES.some((source) => source.key === value);

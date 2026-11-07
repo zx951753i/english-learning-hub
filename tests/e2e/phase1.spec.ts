@@ -102,10 +102,9 @@ test.describe.serial("Phase 1 主要流程", () => {
     await login(page, amy.username, amyPassword);
     await expect(page).toHaveURL(/\/home$/);
     await expect(page.getByRole("heading", { level: 1 })).toContainText(amy.name);
-    await expect(page.getByText(className)).toBeVisible();
-    await expect(page.getByText("教材準備中")).toHaveCount(1);
+    await expect(page.getByText("已開放・0 / 0 關")).toHaveCount(1);
     await expect(page.getByText("尚未開放")).toHaveCount(2);
-    await expect(page.getByText("目前沒有任務")).toBeVisible();
+    await expect(page.getByText("老師正在準備關卡，很快就能出發。")).toBeVisible();
 
     await page.goto("/teacher/students");
     await expect(page).toHaveURL(/\/home$/);
@@ -225,7 +224,7 @@ test.describe.serial("Phase 1 主要流程", () => {
     await page.getByRole("button", { name: "恢復班級" }).click();
     await expect(page.getByRole("button", { name: "封存班級" })).toBeVisible();
     await student.reload();
-    await expect(student.getByText(className)).toBeVisible();
+    await expect(student.getByText("已開放・0 / 0 關")).toBeVisible();
   });
 
   test("登出後回到登入頁", async ({ page }) => {

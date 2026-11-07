@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
 import { requireTeacher } from "@/features/auth/session";
-import { deleteGame, setGamePublished } from "@/features/games/admin-actions";
+import { deleteGame } from "@/features/games/admin-actions";
 import { loadEligibleQuestions } from "@/features/games/eligible";
 import { startGame } from "@/features/games/engine";
 import { getGameDefinition } from "@/features/games/registry";
@@ -34,7 +34,7 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
   const { data: game } = await supabase
     .from("games")
     .select(
-      "id, title, game_type, stage_id, textbook_id, unit_id, question_count, difficulty_min, difficulty_max, is_published, units(title), textbooks(title), learning_stages(difficulty_labels)",
+      "id, title, game_type, stage_id, textbook_id, unit_id, question_count, difficulty_min, difficulty_max, units(title), textbooks(title), learning_stages(difficulty_labels), game_levels(id, is_published)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -50,6 +50,7 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
   const labels =
     (game.learning_stages as unknown as { difficulty_labels: string[] } | null)?.difficulty_labels ??
     ["1", "2", "3", "4"];
+  const level = (game.game_levels as { id: string; is_published: boolean }[])[0];
   const ready = eligible.length >= (definition?.minQuestions ?? 2);
 
   return (
@@ -60,7 +61,7 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
         </Link>
         <div className="mt-1 flex flex-wrap items-center gap-3">
           <h1 className="text-3xl">{game.title}</h1>
-          <Badge tone={game.is_published ? "ok" : "muted"}>{game.is_published ? "已發布" : "未發布"}</Badge>
+          <Badge tone={level?.is_published ? "ok" : "muted"}>{level ? (level.is_published ? "關卡已發布" : "關卡未發布") : "未放上地圖"}</Badge>
         </div>
         <p className="text-muted">
           {definition?.label}・{(game.textbooks as unknown as { title: string }).title}・
@@ -78,18 +79,18 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
           </span>
         </p>
         <div className="flex flex-wrap gap-2">
-          <form action={startGame.bind(null, id, "preview", undefined)}>
+          <form action={startGame.bind(null, id)}>
             <SubmitButton variant="secondary" disabled={!ready} pendingText="準備中…">
               試玩
             </SubmitButton>
           </form>
-          <form action={setGamePublished.bind(null, id, !game.is_published)}>
-            <SubmitButton variant={game.is_published ? "danger" : "primary"} disabled={!game.is_published && !ready}>
-              {game.is_published ? "取消發布" : "發布給學生"}
-            </SubmitButton>
-          </form>
+          {level ? (
+            <Link href={`/teacher/islands/levels/${level.id}`} className="inline-flex min-h-[var(--control-height)] items-center rounded-control px-4 font-medium text-navy underline underline-offset-4">
+              前往關卡設定
+            </Link>
+          ) : null}
         </div>
-        <p className="text-sm text-muted">學生要在已授權這本教材的班級內，才看得到遊戲。</p>
+        <p className="text-sm text-muted">學生從地圖上的關卡進入遊戲；發布與星星門檻在關卡設定。</p>
       </Card>
 
       <Card>

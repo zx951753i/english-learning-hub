@@ -58,7 +58,7 @@ test.describe.serial("Phase 2 教材與題庫", () => {
 
     await page.getByLabel("文章標題").fill("My Pet");
     await page.getByLabel("文章內容").fill("I have a cat.");
-    await page.getByLabel("內容來源").selectOption({ label: "老師原創" });
+    await page.getByLabel("內容來源").selectOption({ label: "Teacher Original：老師確認的原創題目" });
     await page.getByRole("button", { name: "新增文章" }).click();
     await expect(page.getByRole("heading", { name: "閱讀文章（1）" })).toBeVisible();
   });
@@ -75,7 +75,7 @@ test.describe.serial("Phase 2 教材與題庫", () => {
     await page.getByLabel("正確答案").selectOption("C");
     await page.getByLabel("連結文章（選填）").selectOption({ label: "My Pet" });
     await page.getByLabel("難度").selectOption({ label: "Level 2" });
-    await page.getByLabel("題目來源").selectOption({ label: "老師原創" });
+    await page.getByLabel("題目來源").selectOption({ label: "Teacher Original：老師確認的原創題目" });
     await page.getByRole("button", { name: "儲存題目" }).click();
     await expect(alertOn(page)).toContainText("正確答案必須是已填寫的選項");
 
@@ -101,7 +101,7 @@ test.describe.serial("Phase 2 教材與題庫", () => {
     await page.getByLabel("英文單字").fill(`next${run}`);
     await page.getByLabel("中文意思").fill("下一題");
     await page.getByLabel("難度").selectOption({ label: "Level 1" });
-    await page.getByLabel("題目來源").selectOption({ label: "老師提供的資料" });
+    await page.getByLabel("題目來源").selectOption({ label: "Teacher Material：老師提供的教材" });
     await page.getByRole("button", { name: "儲存並新增下一題" }).click();
     await expect(page.getByText("已儲存，可繼續新增下一題")).toBeVisible();
     await expect(page.getByLabel("英文單字")).toHaveValue("");
@@ -139,7 +139,7 @@ test.describe.serial("Phase 2 教材與題庫", () => {
     await expect(alertOn(page)).toContainText("Unit 99");
     const preview = page.url();
 
-    await page.getByLabel("題目來源").selectOption({ label: "老師提供的資料" });
+    await page.getByLabel("題目來源").selectOption({ label: "Teacher Material：老師提供的教材" });
     await page.getByRole("button", { name: "確認匯入 2 題" }).click();
     await expect(page.getByText("已匯入 2 題")).toBeVisible();
 

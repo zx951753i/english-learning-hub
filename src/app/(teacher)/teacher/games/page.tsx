@@ -15,21 +15,24 @@ export default async function GamesPage() {
   const supabase = await createClient();
   const { data: games, error } = await supabase
     .from("games")
-    .select("id, title, game_type, is_published, units(title), textbooks(title)")
+    .select("id, title, game_type, units(title), textbooks(title), game_levels(id, is_published)")
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl">遊戲管理</h1>
-        <Link href="/teacher/games/new" className={buttonClass()}>
+        <div>
+          <h1 className="text-3xl">遊戲管理</h1>
+          <p className="text-muted">每個遊戲設定對應地圖上的一個關卡。</p>
+        </div>
+        <Link href="/teacher/islands" className={buttonClass()}>
           <Plus size={18} aria-hidden />
-          新增遊戲
+          到闖關島新增關卡
         </Link>
       </div>
       {!games || games.length === 0 ? (
-        <EmptyState title="還沒有遊戲">選擇單元和遊戲類型後，就能讓學生練習。</EmptyState>
+        <EmptyState title="還沒有遊戲">在闖關島的區域內新增關卡時，會自動建立遊戲設定。</EmptyState>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {games.map((game) => (
@@ -43,9 +46,11 @@ export default async function GamesPage() {
                   {(game.units as unknown as { title: string }).title}
                 </p>
                 <div className="mt-2">
-                  <Badge tone={game.is_published ? "ok" : "muted"}>
-                    {game.is_published ? "已發布" : "未發布"}
-                  </Badge>
+                  {(() => {
+                    const level = (game.game_levels as { id: string; is_published: boolean }[])[0];
+                    if (!level) return <Badge tone="muted">未放上地圖</Badge>;
+                    return <Badge tone={level.is_published ? "ok" : "muted"}>{level.is_published ? "關卡已發布" : "關卡未發布"}</Badge>;
+                  })()}
                 </div>
               </Card>
             </Link>

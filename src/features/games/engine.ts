@@ -1,16 +1,16 @@
 "use server";
 
 import { notFound, redirect } from "next/navigation";
-import { getCurrentProfile, type Profile } from "@/features/auth/session";
-import { loadEligibleQuestions } from "@/features/games/eligible";
+import { loadZoneLevels } from "@/features/adventure/data";
+import { getCurrentProfile, requireTeacher, type Profile } from "@/features/auth/session";
 import { getGameDefinition } from "@/features/games/registry";
 import { emptyStats, nextStats, scoreFor } from "@/features/games/scoring";
-import { shuffle } from "@/features/games/shuffle";
+import { createSession, SESSION_MODES, type SessionMode } from "@/features/games/session-factory";
 import type { GradingKey, QuestionRow } from "@/features/games/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
-const MODES = ["normal", "retry_all", "retry_wrong", "preview"];
+const GAME_FIELDS = "id, game_type, stage_id, textbook_id, unit_id, question_count, difficulty_min, difficulty_max";
 const MAX_ITEM_MS = 10 * 60 * 1000;
 
 async function requireProfile(): Promise<Profile> {
@@ -19,80 +19,57 @@ async function requireProfile(): Promise<Profile> {
   return profile;
 }
 
-/** 開始一局。權限由學生身分的查詢判斷，RLS 只回傳已授權且已發布的遊戲。 */
-export async function startGame(
-  gameId: string,
-  mode: "normal" | "retry_all" | "retry_wrong" | "preview",
-  retryOfSessionId?: string,
-) {
+/** 老師試玩遊戲設定，不計入任何紀錄。 */
+export async function startGame(gameId: string) {
+  await requireTeacher();
+  const admin = createAdminClient();
+  const { data: game } = await admin.from("games").select(GAME_FIELDS).eq("id", gameId).maybeSingle();
+  if (!game) notFound();
+  const profile = (await getCurrentProfile())!;
+  const result = await createSession(admin, { studentId: profile.id, game, mode: "preview" });
+  if (!result.ok) redirect(`/teacher/games/${gameId}?error=not-enough`);
+  redirect(`/play/${result.sessionId}`);
+}
+
+/**
+ * 開始一個關卡。學生必須看得到這關（RLS：已發布、區域開放、教材已授權），
+ * 且依闖關進度已解鎖；老師一律以試玩模式進行。
+ */
+export async function startLevel(levelId: string, requestedMode: SessionMode, retryOfSessionId?: string) {
   const profile = await requireProfile();
-  if (!MODES.includes(mode)) redirect("/home");
-  if (mode === "preview" && profile.role !== "teacher") redirect("/home");
+  if (!SESSION_MODES.includes(requestedMode)) redirect("/home");
+  const isTeacher = profile.role === "teacher";
+  if (!isTeacher && requestedMode === "preview") redirect("/home");
+  const mode: SessionMode = isTeacher ? "preview" : requestedMode;
 
   const supabase = await createClient();
-  const { data: game } = await supabase
-    .from("games")
-    .select("id, game_type, stage_id, textbook_id, unit_id, question_count, difficulty_min, difficulty_max")
-    .eq("id", gameId)
+  const { data: level } = await supabase
+    .from("game_levels")
+    .select("id, zone_id, game_id")
+    .eq("id", levelId)
     .maybeSingle();
-  if (!game) notFound();
+  if (!level) notFound();
 
-  const definition = getGameDefinition(game.game_type);
-  if (!definition) notFound();
-  const home = profile.role === "teacher" ? `/teacher/games/${gameId}` : "/home";
+  if (!isTeacher) {
+    const levels = await loadZoneLevels(supabase, level.zone_id, profile.id);
+    const target = levels.find((item) => item.id === levelId);
+    if (!target || target.state.status === "locked") redirect(`/zone/${level.zone_id}?locked=1`);
+  }
 
   const admin = createAdminClient();
-  const pool = await loadEligibleQuestions(admin, game);
-  if (pool.length < definition.minQuestions) redirect(`${home}?error=not-enough`);
-
-  let selected = shuffle(pool, Math.random).slice(0, game.question_count);
-
-  if (mode === "retry_wrong") {
-    const { data: previous } = await admin
-      .from("answers")
-      .select("question_id, game_sessions!inner(student_id, game_id)")
-      .eq("session_id", retryOfSessionId ?? "")
-      .eq("is_correct", false)
-      .eq("student_id", profile.id);
-    const wrongIds = new Set(previous?.map((row) => row.question_id));
-    selected = pool.filter((question) => wrongIds.has(question.id));
-    if (selected.length === 0) redirect(home);
+  const { data: game } = await admin.from("games").select(GAME_FIELDS).eq("id", level.game_id).maybeSingle();
+  if (!game) notFound();
+  const result = await createSession(admin, {
+    studentId: profile.id,
+    game,
+    mode,
+    levelId,
+    retryOfSessionId,
+  });
+  if (!result.ok) {
+    redirect(isTeacher ? `/teacher/islands/levels/${levelId}?error=${result.reason}` : `/zone/${level.zone_id}?error=${result.reason}`);
   }
-
-  const rounds = definition.buildRounds(selected, pool, Math.random);
-  const { data: session, error } = await admin
-    .from("game_sessions")
-    .insert({
-      student_id: profile.id,
-      game_id: game.id,
-      game_type: game.game_type,
-      stage_id: game.stage_id,
-      textbook_id: game.textbook_id,
-      unit_id: game.unit_id,
-      mode,
-      retry_of_session_id: retryOfSessionId ?? null,
-      question_total: rounds.length,
-    })
-    .select("id")
-    .single();
-  if (error) throw new Error(error.message);
-
-  const { error: itemError } = await admin.from("game_session_items").insert(
-    rounds.map((round, index) => ({
-      session_id: session.id,
-      question_id: selected[index].id,
-      position: index + 1,
-      question_snapshot: selected[index],
-      public_round: round.publicRound,
-      grading_key: round.gradingKey,
-    })),
-  );
-  if (itemError) {
-    await admin.from("game_sessions").delete().eq("id", session.id);
-    throw new Error(itemError.message);
-  }
-
-  redirect(`/play/${session.id}`);
+  redirect(`/play/${result.sessionId}`);
 }
 
 export type AnswerResult =
@@ -116,7 +93,7 @@ export async function submitAnswer(
 
   const { data: session } = await admin
     .from("game_sessions")
-    .select("id, student_id, status, mode, game_type, textbook_id, unit_id, question_total, time_spent")
+    .select("id, student_id, status, mode, level_id, game_type, textbook_id, unit_id, question_total, time_spent")
     .eq("id", sessionId)
     .eq("student_id", profile.id)
     .maybeSingle();
@@ -205,6 +182,7 @@ export async function submitAnswer(
         completed_at: new Date().toISOString(),
       })
       .eq("id", sessionId);
+    if (session.level_id) await admin.rpc("record_level_result", { p_session_id: sessionId });
   }
 
   return { ok: true, isCorrect, correctAnswer: key.display, explanation, finished };
