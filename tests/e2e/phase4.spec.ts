@@ -151,10 +151,32 @@ test.describe.serial("Phase 4 冒險世界", () => {
     await expect(page.getByRole("heading", { name: "關卡路線（3）" })).toBeVisible();
     await expect(page.getByText("暫時關")).toHaveCount(0);
 
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
+
+  test("有學生紀錄的區域也能刪除：關卡與星星移除，作答紀錄保留", async ({ page, browser, baseURL }) => {
+    await loginTeacher(page);
+    await page.goto(zoneUrl);
     await page.getByRole("button", { name: "刪除 第一關" }).click();
+    await expect(page.getByText("學生在這關的星星會一起移除。")).toBeVisible();
     await page.getByRole("button", { name: "確定刪除" }).click();
-    await expect(alertOn(page)).toContainText("已有學生的作答紀錄");
-    await expect(page.getByRole("heading", { name: "關卡路線（3）" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "關卡路線（2）" })).toBeVisible();
+
+    await openBook(page, book);
+    await page.getByRole("button", { name: "刪除 Vocabulary Village" }).click();
+    await expect(page.getByText("2 個關卡和學生的星星會一起移除。")).toBeVisible();
+    await page.getByRole("button", { name: "確定刪除" }).click();
+    await expect(page.getByRole("heading", { name: "學習區域（6）" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Vocabulary Village/ })).toHaveCount(0);
+
+    const kid = await studentPage(browser, baseURL, student);
+    await expect(kid.getByText("0 顆星", { exact: true })).toBeVisible();
+    await kid.goto(studentZone);
+    await expect(kid.getByText("找不到這個頁面")).toBeVisible();
+
+    await page.goto("/teacher/games");
+    await expect(page.getByRole("link", { name: /第一關/ }).first()).toContainText("未放上地圖");
+    await expect(page.getByText("關卡已發布").first()).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
 });

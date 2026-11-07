@@ -4,9 +4,10 @@ import Link from "next/link";
 import { ZoneIcon } from "@/components/adventure/zone-icon";
 import { Badge } from "@/components/ui/badge";
 import { Card, EmptyState } from "@/components/ui/card";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { createZonesFromTemplate, moveZone } from "@/features/adventure/admin-actions";
+import { createZonesFromTemplate, deleteZone, moveZone } from "@/features/adventure/admin-actions";
 import { ZONE_TEMPLATES } from "@/features/adventure/rules";
 import { requireTeacher } from "@/features/auth/session";
 import { createClient } from "@/lib/supabase/server";
@@ -104,8 +105,8 @@ export default async function IslandsPage({ searchParams }: Props) {
                   const levels = zone.game_levels as { id: string; is_published: boolean }[];
                   const published = levels.filter((level) => level.is_published).length;
                   return (
-                    <li key={zone.id} className="flex items-center justify-between gap-2 py-1.5">
-                      <Link href={`/teacher/islands/zones/${zone.id}`} className="flex min-w-0 flex-1 items-center gap-3 py-1">
+                    <li key={zone.id} className="flex flex-wrap items-center justify-between gap-x-2 py-1.5">
+                      <Link href={`/teacher/islands/zones/${zone.id}`} className="flex min-w-0 basis-full items-center gap-3 py-1 sm:basis-0 sm:flex-1">
                         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-sky text-navy">
                           <ZoneIcon theme={zone.theme_key} />
                         </span>
@@ -117,7 +118,7 @@ export default async function IslandsPage({ searchParams }: Props) {
                         </span>
                         {!zone.is_open ? <Badge tone="muted">已關閉</Badge> : null}
                       </Link>
-                      <span className="flex shrink-0">
+                      <span className="ml-auto flex max-w-full flex-wrap items-center justify-end">
                         <form action={moveZone.bind(null, book!.id, zone.id, -1)}>
                           <SubmitButton variant="ghost" pendingText="…" disabled={index === 0} aria-label={`將 ${zone.name} 上移`} className="px-2.5">
                             <ArrowUp size={18} aria-hidden />
@@ -128,6 +129,11 @@ export default async function IslandsPage({ searchParams }: Props) {
                             <ArrowDown size={18} aria-hidden />
                           </SubmitButton>
                         </form>
+                        <ConfirmDelete
+                          action={deleteZone.bind(null, zone.id, book!.id)}
+                          label={`刪除 ${zone.name}`}
+                          warning={levels.length ? `${levels.length} 個關卡和學生的星星會一起移除。` : undefined}
+                        />
                       </span>
                     </li>
                   );

@@ -50,7 +50,7 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
   const labels =
     (game.learning_stages as unknown as { difficulty_labels: string[] } | null)?.difficulty_labels ??
     ["1", "2", "3", "4"];
-  const level = (game.game_levels as { id: string; is_published: boolean }[])[0];
+  const level = firstLevel(game.game_levels);
   const ready = eligible.length >= (definition?.minQuestions ?? 2);
 
   return (
@@ -110,4 +110,12 @@ export default async function GameDetailPage({ params, searchParams }: Props) {
       ) : null}
     </div>
   );
+}
+
+type LevelLink = { id: string; is_published: boolean };
+
+/** game_levels.game_id 是 unique，PostgREST 會回傳單一物件或 null，而不是陣列。 */
+function firstLevel(value: unknown): LevelLink | undefined {
+  if (Array.isArray(value)) return value[0];
+  return (value as LevelLink | null) ?? undefined;
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { Card } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -20,7 +21,7 @@ export const metadata: Metadata = { title: "關卡設定" };
 const ERRORS: Record<string, string> = {
   "not-enough": "可用題目不足，至少需要 2 題已確認並啟用的題目。",
   publish: "更新失敗，請稍後再試。",
-  delete: "這個關卡已有學生紀錄，無法刪除；可以改為取消發布。",
+  delete: "關卡刪除失敗，請稍後再試。",
   questions: "指定題目儲存失敗，請稍後再試。",
 };
 
@@ -137,16 +138,15 @@ export default async function LevelPage({ params, searchParams }: Props) {
         )}
       </Card>
 
-      {!sessions ? (
-        <Card>
-          <h2 className="mb-3 text-xl">刪除關卡</h2>
-          <form action={deleteLevel.bind(null, id, level.zone_id, "level")}>
-            <SubmitButton variant="danger" pendingText="刪除中…">
-              刪除關卡
-            </SubmitButton>
-          </form>
-        </Card>
-      ) : null}
+      <Card>
+        <h2 className="mb-3 text-xl">刪除關卡</h2>
+        <ConfirmDelete
+          variant="button"
+          action={deleteLevel.bind(null, id, level.zone_id, "level")}
+          label="刪除關卡"
+          warning={sessions ? `已有 ${sessions} 次學生作答，學生在這關的星星會一起移除。` : undefined}
+        />
+      </Card>
     </div>
   );
 }

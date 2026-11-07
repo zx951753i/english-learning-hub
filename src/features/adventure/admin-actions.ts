@@ -131,9 +131,32 @@ export async function moveZone(textbookId: string, zoneId: string, direction: -1
   refresh();
 }
 
+/**
+ * 移除一個關卡：學生在這關的星星（student_progress）一併移除；
+ * 作答紀錄保留在 game_sessions（level_id 改為空值），供日後學習分析使用。
+ * 遊戲設定只有在沒有學生紀錄時才刪除（老師試玩紀錄會跟著刪掉）。
+ */
+async function removeLevel(supabase: Awaited<ReturnType<typeof createClient>>, levelId: string) {
+  const { data: level } = await supabase.from("game_levels").select("game_id").eq("id", levelId).maybeSingle();
+  if (!level) return true;
+  const { error } = await supabase.from("game_levels").delete().eq("id", levelId);
+  if (error) return false;
+  const { count } = await supabase
+    .from("game_sessions")
+    .select("id", { count: "exact", head: true })
+    .eq("game_id", level.game_id)
+    .neq("mode", "preview");
+  if (!count) await supabase.from("games").delete().eq("id", level.game_id);
+  return true;
+}
+
 export async function deleteZone(zoneId: string, textbookId: string) {
   await requireTeacher();
   const supabase = await createClient();
+  const { data: levels } = await supabase.from("game_levels").select("id").eq("zone_id", zoneId);
+  for (const level of levels ?? []) {
+    if (!(await removeLevel(supabase, level.id))) redirect(`/teacher/islands/zones/${zoneId}?error=delete`);
+  }
   const { error } = await supabase.from("island_zones").delete().eq("id", zoneId);
   if (error) redirect(`/teacher/islands/zones/${zoneId}?error=delete`);
   refresh();
@@ -351,20 +374,10 @@ export async function moveLevel(zoneId: string, levelId: string, direction: -1 |
 /** 只有沒有學生紀錄的關卡可以刪除；有紀錄的請改為取消發布。 */
 export async function deleteLevel(levelId: string, zoneId: string, from: "level" | "zone" = "level") {
   await requireTeacher();
-  const back =
-    from === "zone" ? `/teacher/islands/zones/${zoneId}?error=levelUsed` : `/teacher/islands/levels/${levelId}?error=delete`;
   const supabase = await createClient();
-  const { count } = await supabase
-    .from("game_sessions")
-    .select("id", { count: "exact", head: true })
-    .eq("level_id", levelId)
-    .neq("mode", "preview");
-  if (count) redirect(back);
-
-  const { data: level } = await supabase.from("game_levels").select("game_id").eq("id", levelId).maybeSingle();
-  const { error } = await supabase.from("game_levels").delete().eq("id", levelId);
-  if (error || !level) redirect(back);
-  await supabase.from("games").delete().eq("id", level.game_id);
+  if (!(await removeLevel(supabase, levelId))) {
+    redirect(from === "zone" ? `/teacher/islands/zones/${zoneId}?error=deleteLevel` : `/teacher/islands/levels/${levelId}?error=delete`);
+  }
   refresh();
   redirect(`/teacher/islands/zones/${zoneId}`);
 }

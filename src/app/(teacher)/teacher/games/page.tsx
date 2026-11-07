@@ -47,7 +47,7 @@ export default async function GamesPage() {
                 </p>
                 <div className="mt-2">
                   {(() => {
-                    const level = (game.game_levels as { id: string; is_published: boolean }[])[0];
+                    const level = firstLevel(game.game_levels);
                     if (!level) return <Badge tone="muted">未放上地圖</Badge>;
                     return <Badge tone={level.is_published ? "ok" : "muted"}>{level.is_published ? "關卡已發布" : "關卡未發布"}</Badge>;
                   })()}
@@ -59,4 +59,12 @@ export default async function GamesPage() {
       )}
     </div>
   );
+}
+
+type LevelLink = { id: string; is_published: boolean };
+
+/** game_levels.game_id 是 unique，PostgREST 會回傳單一物件或 null，而不是陣列。 */
+function firstLevel(value: unknown): LevelLink | undefined {
+  if (Array.isArray(value)) return value[0];
+  return (value as LevelLink | null) ?? undefined;
 }

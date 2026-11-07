@@ -5,24 +5,24 @@ import { notFound } from "next/navigation";
 import { ZoneIcon } from "@/components/adventure/zone-icon";
 import { Badge } from "@/components/ui/badge";
 import { Card, EmptyState } from "@/components/ui/card";
+import { ConfirmDelete } from "@/components/ui/confirm-delete";
 import { SelectField } from "@/components/ui/field";
 import { Notice } from "@/components/ui/notice";
 import { SubmitButton } from "@/components/ui/submit-button";
-import { createLevelsForUnits, deleteZone, moveLevel, setZoneOpen } from "@/features/adventure/admin-actions";
+import { createLevelsForUnits, deleteLevel, deleteZone, moveLevel, setZoneOpen } from "@/features/adventure/admin-actions";
 import { requireTeacher } from "@/features/auth/session";
 import { GAME_DEFINITIONS, getGameDefinition } from "@/features/games/registry";
 import { createClient } from "@/lib/supabase/server";
 import { ZoneForm } from "../../zone-form";
-import { DeleteLevelButton } from "./delete-level-button";
 import { NewLevelForm } from "./zone-editors";
 
 export const metadata: Metadata = { title: "學習區域" };
 
 const ERRORS: Record<string, string> = {
-  delete: "這個區域還有關卡，無法刪除；可以改為關閉。",
+  delete: "區域刪除失敗，請稍後再試。",
   move: "順序調整失敗，請稍後再試。",
   bulk: "部分關卡建立失敗，請檢查後再試。",
-  levelUsed: "這個關卡已有學生的作答紀錄，為了保留紀錄無法刪除；可以進入關卡改為取消發布。",
+  deleteLevel: "關卡刪除失敗，請稍後再試。",
   status: "狀態更新失敗，請稍後再試。",
 };
 
@@ -96,7 +96,7 @@ export default async function ZonePage({ params, searchParams }: Props) {
                     </span>
                     <Badge tone={level.is_published ? "ok" : "muted"}>{level.is_published ? "已發布" : "未發布"}</Badge>
                   </Link>
-                  <span className="ml-auto flex shrink-0 items-center">
+                  <span className="ml-auto flex max-w-full flex-wrap items-center justify-end">
                     <form action={moveLevel.bind(null, id, level.id, -1)}>
                       <SubmitButton variant="ghost" pendingText="…" disabled={index === 0} aria-label={`將 ${level.title} 上移`} className="px-2.5">
                         <ArrowUp size={18} aria-hidden />
@@ -107,7 +107,11 @@ export default async function ZonePage({ params, searchParams }: Props) {
                         <ArrowDown size={18} aria-hidden />
                       </SubmitButton>
                     </form>
-                    <DeleteLevelButton levelId={level.id} zoneId={id} title={level.title} />
+                    <ConfirmDelete
+                      action={deleteLevel.bind(null, level.id, id, "zone")}
+                      label={`刪除 ${level.title}`}
+                      warning="學生在這關的星星會一起移除。"
+                    />
                   </span>
                 </li>
               );
@@ -157,13 +161,12 @@ export default async function ZonePage({ params, searchParams }: Props) {
           <form action={setZoneOpen.bind(null, id, !zone.is_open)}>
             <SubmitButton variant={zone.is_open ? "danger" : "secondary"}>{zone.is_open ? "關閉區域" : "開放區域"}</SubmitButton>
           </form>
-          {!levels?.length ? (
-            <form action={deleteZone.bind(null, id, zone.textbook_id)}>
-              <SubmitButton variant="danger" pendingText="刪除中…">
-                刪除區域
-              </SubmitButton>
-            </form>
-          ) : null}
+          <ConfirmDelete
+            variant="button"
+            action={deleteZone.bind(null, id, zone.textbook_id)}
+            label="刪除區域"
+            warning={levels?.length ? `裡面的 ${levels.length} 個關卡和學生在這些關卡的星星會一起移除。` : undefined}
+          />
         </div>
       </Card>
     </div>
