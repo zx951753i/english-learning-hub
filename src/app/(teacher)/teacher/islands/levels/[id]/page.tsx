@@ -140,7 +140,7 @@ export default async function LevelPage({ params, searchParams }: Props) {
       {!sessions ? (
         <Card>
           <h2 className="mb-3 text-xl">刪除關卡</h2>
-          <form action={deleteLevel.bind(null, id, level.zone_id)}>
+          <form action={deleteLevel.bind(null, id, level.zone_id, "level")}>
             <SubmitButton variant="danger" pendingText="刪除中…">
               刪除關卡
             </SubmitButton>

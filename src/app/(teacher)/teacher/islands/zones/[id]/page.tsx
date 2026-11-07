@@ -13,6 +13,7 @@ import { requireTeacher } from "@/features/auth/session";
 import { GAME_DEFINITIONS, getGameDefinition } from "@/features/games/registry";
 import { createClient } from "@/lib/supabase/server";
 import { ZoneForm } from "../../zone-form";
+import { DeleteLevelButton } from "./delete-level-button";
 import { NewLevelForm } from "./zone-editors";
 
 export const metadata: Metadata = { title: "學習區域" };
@@ -21,6 +22,7 @@ const ERRORS: Record<string, string> = {
   delete: "這個區域還有關卡，無法刪除；可以改為關閉。",
   move: "順序調整失敗，請稍後再試。",
   bulk: "部分關卡建立失敗，請檢查後再試。",
+  levelUsed: "這個關卡已有學生的作答紀錄，為了保留紀錄無法刪除；可以進入關卡改為取消發布。",
   status: "狀態更新失敗，請稍後再試。",
 };
 
@@ -81,8 +83,8 @@ export default async function ZonePage({ params, searchParams }: Props) {
             {levels.map((level, index) => {
               const game = level.games as unknown as { game_type: string; units: { title: string } };
               return (
-                <li key={level.id} className="flex items-center justify-between gap-2 py-1.5">
-                  <Link href={`/teacher/islands/levels/${level.id}`} className="flex min-w-0 flex-1 items-center gap-3 py-1">
+                <li key={level.id} className="flex flex-wrap items-center justify-between gap-x-2 py-1.5">
+                  <Link href={`/teacher/islands/levels/${level.id}`} className="flex min-w-0 basis-full items-center gap-3 py-1 sm:basis-0 sm:flex-1">
                     <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-navy font-serif font-semibold text-cream">
                       {level.is_boss ? <Crown size={18} aria-label="終極挑戰" /> : index + 1}
                     </span>
@@ -94,7 +96,7 @@ export default async function ZonePage({ params, searchParams }: Props) {
                     </span>
                     <Badge tone={level.is_published ? "ok" : "muted"}>{level.is_published ? "已發布" : "未發布"}</Badge>
                   </Link>
-                  <span className="flex shrink-0">
+                  <span className="ml-auto flex shrink-0 items-center">
                     <form action={moveLevel.bind(null, id, level.id, -1)}>
                       <SubmitButton variant="ghost" pendingText="…" disabled={index === 0} aria-label={`將 ${level.title} 上移`} className="px-2.5">
                         <ArrowUp size={18} aria-hidden />
@@ -105,6 +107,7 @@ export default async function ZonePage({ params, searchParams }: Props) {
                         <ArrowDown size={18} aria-hidden />
                       </SubmitButton>
                     </form>
+                    <DeleteLevelButton levelId={level.id} zoneId={id} title={level.title} />
                   </span>
                 </li>
               );

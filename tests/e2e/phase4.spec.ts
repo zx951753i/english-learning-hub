@@ -138,4 +138,23 @@ test.describe.serial("Phase 4 冒險世界", () => {
     await page.getByRole("button", { name: "開放區域" }).click();
     await expect(page.getByRole("button", { name: "關閉區域" })).toBeVisible();
   });
+
+  test("關卡路線可刪除未使用的關卡；有學生紀錄的關卡不能刪", async ({ page }) => {
+    await loginTeacher(page);
+    await addLevel(page, zoneUrl, { type: "Word Spelling", title: "暫時關", publish: false });
+    await page.goto(zoneUrl);
+    await expect(page.getByRole("heading", { name: "關卡路線（4）" })).toBeVisible();
+    await page.getByRole("button", { name: "刪除 暫時關" }).click();
+    await page.getByRole("button", { name: "取消" }).click();
+    await page.getByRole("button", { name: "刪除 暫時關" }).click();
+    await page.getByRole("button", { name: "確定刪除" }).click();
+    await expect(page.getByRole("heading", { name: "關卡路線（3）" })).toBeVisible();
+    await expect(page.getByText("暫時關")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "刪除 第一關" }).click();
+    await page.getByRole("button", { name: "確定刪除" }).click();
+    await expect(alertOn(page)).toContainText("已有學生的作答紀錄");
+    await expect(page.getByRole("heading", { name: "關卡路線（3）" })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  });
 });

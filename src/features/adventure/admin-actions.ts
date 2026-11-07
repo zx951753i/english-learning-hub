@@ -349,19 +349,21 @@ export async function moveLevel(zoneId: string, levelId: string, direction: -1 |
 }
 
 /** 只有沒有學生紀錄的關卡可以刪除；有紀錄的請改為取消發布。 */
-export async function deleteLevel(levelId: string, zoneId: string) {
+export async function deleteLevel(levelId: string, zoneId: string, from: "level" | "zone" = "level") {
   await requireTeacher();
+  const back =
+    from === "zone" ? `/teacher/islands/zones/${zoneId}?error=levelUsed` : `/teacher/islands/levels/${levelId}?error=delete`;
   const supabase = await createClient();
   const { count } = await supabase
     .from("game_sessions")
     .select("id", { count: "exact", head: true })
     .eq("level_id", levelId)
     .neq("mode", "preview");
-  if (count) redirect(`/teacher/islands/levels/${levelId}?error=delete`);
+  if (count) redirect(back);
 
   const { data: level } = await supabase.from("game_levels").select("game_id").eq("id", levelId).maybeSingle();
   const { error } = await supabase.from("game_levels").delete().eq("id", levelId);
-  if (error || !level) redirect(`/teacher/islands/levels/${levelId}?error=delete`);
+  if (error || !level) redirect(back);
   await supabase.from("games").delete().eq("id", level.game_id);
   refresh();
   redirect(`/teacher/islands/zones/${zoneId}`);
