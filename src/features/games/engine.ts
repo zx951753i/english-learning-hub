@@ -103,6 +103,8 @@ export type AnswerResult =
       correctAnswer: string;
       explanation: string | null;
       finished: boolean;
+      /** 作答後要唸出的英文。 */
+      speakAfter?: string;
     }
   | { ok: false; error: string };
 
@@ -149,6 +151,7 @@ export async function submitAnswer(
       correctAnswer: key.display,
       explanation,
       finished: session.status === "completed",
+      speakAfter: key.speakAfter,
     };
   }
 
@@ -211,5 +214,5 @@ export async function submitAnswer(
     await awardMissionBadges(admin, { id: sessionId, student_id: profile.id, mode: session.mode, score });
   }
 
-  return { ok: true, isCorrect, correctAnswer: key.display, explanation, finished };
+  return { ok: true, isCorrect, correctAnswer: key.display, explanation, finished, speakAfter: key.speakAfter };
 }

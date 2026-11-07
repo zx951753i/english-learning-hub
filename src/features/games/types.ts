@@ -42,6 +42,8 @@ export type GradingKey = {
   accepted?: string[];
   /** Final Boss：這一題實際使用的遊戲。 */
   game?: string;
+  /** 作答後才唸出的英文（例如看圖選字的正確單字），避免作答前洩漏答案。 */
+  speakAfter?: string;
 };
 
 export type BuiltRound = { publicRound: PublicRound; gradingKey: GradingKey };

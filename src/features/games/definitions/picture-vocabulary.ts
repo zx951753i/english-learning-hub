@@ -35,7 +35,11 @@ export const pictureVocabulary: GameDefinition = {
           image: image(question),
           options,
         },
-        gradingKey: { answer: correct.id, display: `${word(question)}｜${meaning(question)}` },
+        gradingKey: {
+          answer: correct.id,
+          display: `${word(question)}｜${meaning(question)}`,
+          speakAfter: word(question),
+        },
       };
     });
   },

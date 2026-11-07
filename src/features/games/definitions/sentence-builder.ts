@@ -49,6 +49,7 @@ export const sentenceBuilder: GameDefinition = {
           answer: correct,
           accepted: [normalizeSentence(answer(question)), ...alternatives(question).map(normalizeSentence)],
           display: normalizeSentence(answer(question)),
+          speakAfter: normalizeSentence(answer(question)),
         },
       };
     });

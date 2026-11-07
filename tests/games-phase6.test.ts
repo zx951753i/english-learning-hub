@@ -160,3 +160,25 @@ describe("音檔格式判斷", () => {
     expect(detectMedia(bytes([0xff, 0xd8, 0xff, 0xe0]))).toMatchObject({ kind: "image", ext: "jpg" });
   });
 });
+
+describe("作答後唸出正確答案", () => {
+  it("看圖選字：作答後才唸單字，作答前題目裡沒有發音", () => {
+    const pool = [vocab("cat", "貓", "cat.png"), vocab("dog", "狗")];
+    const [round] = pictureVocabulary.buildRounds([pool[0]], pool, seeded());
+    expect(round.gradingKey.speakAfter).toBe("cat");
+    expect(round.publicRound).not.toHaveProperty("speak");
+  });
+  it("句子重組：作答後唸整句", () => {
+    const [round] = sentenceBuilder.buildRounds([sentence("I like apples.", ["I", "like", "apples."])], [], seeded());
+    expect(round.gradingKey.speakAfter).toBe("I like apples.");
+  });
+  it("Final Boss 保留各遊戲的作答後發音", () => {
+    const pool = [vocab("cat", "貓", "cat.png"), vocab("dog", "狗", "dog.png"), sentence("I like cats.", ["I", "like", "cats."])];
+    const rounds = finalBoss.buildRounds(pool, pool, seeded(5));
+    for (const round of rounds) {
+      if (round.gradingKey.game === "picture_vocabulary" || round.gradingKey.game === "sentence_builder") {
+        expect(round.gradingKey.speakAfter).toBeTruthy();
+      }
+    }
+  });
+});

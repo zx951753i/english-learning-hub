@@ -152,6 +152,7 @@ test.describe.serial("Phase 6 新遊戲、Final Boss、音檔", () => {
         await expect(page.getByLabel("我排的句子")).toContainText(correct.join(""));
         await page.getByRole("button", { name: "送出答案" }).click();
         await expect(page.getByText("答對了！")).toBeVisible();
+        await expect(page.getByRole("button", { name: "再聽一次" })).toBeVisible();
       } else {
         for (const chunk of [...correct].reverse()) await board.getByRole("button", { name: chunk, exact: true }).click();
         await page.getByRole("button", { name: "送出答案" }).click();

@@ -138,6 +138,11 @@ function ChunkBoard({
 }
 
 function FeedbackPanel({ feedback, onNext }: { feedback: Feedback; onNext: () => void }) {
+  // 作答後唸出正確答案。電腦會自動播放；iPhone 若擋下，可按「再聽一次」。
+  useEffect(() => {
+    if (feedback.speakAfter) speakEnglish(feedback.speakAfter);
+  }, [feedback.speakAfter]);
+
   return (
     <div
       role="status"
@@ -149,10 +154,18 @@ function FeedbackPanel({ feedback, onNext }: { feedback: Feedback; onNext: () =>
       </p>
       {!feedback.isCorrect ? <p>正確答案：{feedback.correctAnswer}</p> : null}
       {feedback.explanation ? <p className="text-sm text-muted">{feedback.explanation}</p> : null}
-      <Button onClick={onNext} autoFocus className="w-full sm:w-auto">
-        {feedback.finished ? "看成績" : "下一題"}
-        <ArrowRight size={18} aria-hidden />
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        {feedback.speakAfter ? (
+          <Button variant="secondary" onClick={() => speakEnglish(feedback.speakAfter!)}>
+            <Volume2 size={18} aria-hidden />
+            再聽一次
+          </Button>
+        ) : null}
+        <Button onClick={onNext} autoFocus className="w-full sm:w-auto">
+          {feedback.finished ? "看成績" : "下一題"}
+          <ArrowRight size={18} aria-hidden />
+        </Button>
+      </div>
     </div>
   );
 }
